@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 use RoundlyConsulting\Appointments\Events\ParticipantCreated;
 use RoundlyConsulting\Appointments\Events\ParticipantDeleted;
 use RoundlyConsulting\Appointments\Events\ParticipantUpdated;
@@ -18,6 +19,7 @@ use RoundlyConsulting\Appointments\Events\ParticipantUpdated;
  * @property int $appointment_id
  * @property string $participant_type
  * @property int $participant_id
+ * @property ?ParticipantRole $role
  * @property ?Collection<array-key, mixed> $meta
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
@@ -27,9 +29,15 @@ final class Participant extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'appointment_participants';
-
     protected $guarded = [];
+
+    public function getTable(): string
+    {
+        /** @var string $table */
+        $table = config('appointments.table_names.participants', 'appointment_participants');
+
+        return $table;
+    }
 
     /** @var array<string, class-string> */
     protected $dispatchesEvents = [
@@ -63,6 +71,7 @@ final class Participant extends Model
     protected function casts(): array
     {
         return [
+            'role' => ParticipantRole::class,
             'meta' => 'collection',
         ];
     }
