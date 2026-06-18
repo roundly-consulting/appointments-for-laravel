@@ -1,0 +1,177 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RoundlyConsulting\Appointments\Support\Ics;
+
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
+use RoundlyConsulting\Appointments\Enums\Status;
+use RoundlyConsulting\Appointments\Models\Appointment;
+
+final class IcsGenerator
+{
+    private const CRLF = "\r\n";
+
+    private const PRODID = '-//Roundly Consulting//Appointments for Laravel//EN';
+
+    public function forAppointment(Appointment $appointment): string
+    {
+        return $this->wrap($this->event($appointment));
+    }
+
+    /**
+     * @param  iterable<Appointment>  $appointments
+     */
+    public function forCollection(iterable $appointments): string
+    {
+        $events = [];
+
+        foreach ($appointments as $appointment) {
+            $events = [...$events, ...$this->event($appointment)];
+        }
+
+        return $this->wrap($events);
+    }
+
+    /**
+     * @param  list<string>  $events
+     */
+    private function wrap(array $events): string
+    {
+        $lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:'.self::PRODID,
+            'CALSCALE:GREGORIAN',
+            ...$events,
+            'END:VCALENDAR',
+        ];
+
+        return implode(self::CRLF, array_map($this->fold(...), $lines)).self::CRLF;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function event(Appointment $appointment): array
+    {
+        $start = CarbonImmutable::instance($appointment->starts_at)->utc();
+        $end = $appointment->ends_at !== null
+            ? CarbonImmutable::instance($appointment->ends_at)->utc()
+            : $start->addMinutes($appointment->durationInMinutes());
+
+        $lines = [
+            'BEGIN:VEVENT',
+            'UID:'.$this->uid($appointment),
+            'DTSTAMP:'.$this->stamp(CarbonImmutable::now()->utc()),
+            'DTSTART:'.$this->stamp($start),
+            'DTEND:'.$this->stamp($end),
+            'SUMMARY:'.$this->escape($appointment->name),
+            'STATUS:'.$this->status($appointment->status),
+        ];
+
+        if ($appointment->description !== null && $appointment->description !== '') {
+            $lines[] = 'DESCRIPTION:'.$this->escape($appointment->description);
+        }
+
+        $location = $this->location($appointment);
+
+        if ($location !== null) {
+            $lines[] = 'LOCATION:'.$this->escape($location);
+        }
+
+        foreach ($this->attendees($appointment) as $attendee) {
+            $lines[] = 'ATTENDEE:'.$this->escape($attendee);
+        }
+
+        $lines[] = 'END:VEVENT';
+
+        return $lines;
+    }
+
+    private function uid(Appointment $appointment): string
+    {
+        return sprintf('appointment-%s@roundly-consulting', $appointment->getKey());
+    }
+
+    private function stamp(CarbonImmutable $moment): string
+    {
+        return $moment->format('Ymd\THis\Z');
+    }
+
+    private function status(Status $status): string
+    {
+        return match ($status) {
+            Status::Confirmed, Status::Completed => 'CONFIRMED',
+            Status::Cancelled, Status::Declined, Status::NoShow => 'CANCELLED',
+            Status::Pending => 'TENTATIVE',
+        };
+    }
+
+    private function location(Appointment $appointment): ?string
+    {
+        $location = $appointment->meta?->get('location');
+
+        return is_string($location) ? $location : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function attendees(Appointment $appointment): array
+    {
+        $names = [];
+
+        foreach ($appointment->participants as $participant) {
+            $related = $participant->participant;
+
+            if ($related instanceof Model) {
+                $names[] = sprintf('%s:%s', $related->getMorphClass(), $related->getKey());
+            }
+        }
+
+        return $names;
+    }
+
+    private function escape(string $value): string
+    {
+        return str_replace(
+            ['\\', "\n", ',', ';'],
+            ['\\\\', '\\n', '\\,', '\\;'],
+            $value,
+        );
+    }
+
+    /**
+     * Fold lines longer than 75 octets per RFC 5545 (continuation lines start
+     * with a single space).
+     */
+    private function fold(string $line): string
+    {
+        if (strlen($line) <= 75) {
+            return $line;
+        }
+
+        $chunks = [];
+        $current = '';
+        // The first line may use the full 75 octets; continuation lines start
+        // with a leading space that itself counts toward the limit, so they
+        // carry at most 74 octets of content.
+        $limit = 75;
+
+        foreach (mb_str_split($line) as $char) {
+            if (strlen($current) + strlen($char) > $limit) {
+                $chunks[] = $current;
+                $current = '';
+                $limit = 74;
+            }
+
+            $current .= $char;
+        }
+
+        $chunks[] = $current;
+
+        return implode(self::CRLF.' ', $chunks);
+    }
+}
