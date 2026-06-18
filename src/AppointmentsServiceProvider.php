@@ -11,11 +11,14 @@ final class AppointmentsServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/appointments.php', 'appointments');
+
+        $this->app->singleton(AppointmentManager::class);
     }
 
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'appointments');
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -25,6 +28,10 @@ final class AppointmentsServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
             ], 'appointments-migrations');
+
+            $this->publishes([
+                __DIR__.'/../resources/lang' => $this->app->langPath('vendor/appointments'),
+            ], 'appointments-translations');
         }
     }
 }

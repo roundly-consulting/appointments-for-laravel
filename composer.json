@@ -60,7 +60,10 @@
         "laravel": {
             "providers": [
                 "RoundlyConsulting\\Appointments\\AppointmentsServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Appointments": "RoundlyConsulting\\Appointments\\Facades\\Appointments"
+            }
         }
     },
     "minimum-stability": "stable",

@@ -18,10 +18,17 @@ final class AppointmentFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
+            'name' => fake()->sentence(3),
             'description' => fake()->text(),
-            'status' => fake()->randomElement([Status::New, Status::Accepted, Status::Rejected]),
-            'appointment_at' => now(),
+            'status' => Status::Pending,
+            'timezone' => null,
+            'starts_at' => now()->addDay(),
+            'duration_minutes' => 60,
         ];
+    }
+
+    public function withStatus(Status $status): self
+    {
+        return $this->state(fn (): array => ['status' => $status]);
     }
 }
