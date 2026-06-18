@@ -9,7 +9,7 @@ use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
 use RoundlyConsulting\Appointments\Tests\Models\User;
 
-it('creates appointment', function () {
+it('creates appointment via the deprecated service shim', function (): void {
     /** @var AppointmentsService $as */
     $as = resolve(AppointmentsService::class);
 
@@ -37,7 +37,7 @@ it('creates appointment', function () {
         ->toBeInstanceOf(Appointment::class)
         ->name->toBe('Awesome dinner')
         ->description->toBe('The best chicken wings ever!')
-        ->appointment_at->format('Y-m-d H:i')->toBe('2023-03-01 17:30')
+        ->starts_at->format('Y-m-d H:i')->toBe('2023-03-01 17:30')
         ->meta->toBeInstanceOf(Collection::class)
         ->meta->toArray()->toBe($meta->toArray())
         ->participants->toBeInstanceOf(Collection::class)
@@ -48,7 +48,7 @@ it('creates appointment', function () {
         ->meta->toArray()->toBe(['is_host' => true]);
 });
 
-it('adds participant to existing appointment', function () {
+it('adds participant to existing appointment via the shim', function (): void {
     /** @var AppointmentsService $as */
     $as = resolve(AppointmentsService::class);
 

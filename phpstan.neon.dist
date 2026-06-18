@@ -4,4 +4,5 @@ parameters:
         - src
         - config
         - database
+        - tests/Models
     checkModelProperties: true
