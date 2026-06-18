@@ -42,6 +42,7 @@ final class Appointment extends Model
 
     /** @use HasFactory<AppointmentFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     protected $guarded = [];
