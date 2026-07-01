@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Appointments\Actions;
 
 use Carbon\CarbonImmutable;
+use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentApprovalData;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
+use RoundlyConsulting\Approvals\Facades\Approvals;
 
 final class CreateAppointmentAction
 {
@@ -36,6 +38,8 @@ final class CreateAppointmentAction
             'status' => $data->status,
             'meta' => $data->meta,
             'timezone' => $data->timezone,
+            'location' => $data->location,
+            'coordinates' => $data->coordinates,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'duration_minutes' => $data->durationMinutes,
@@ -45,7 +49,42 @@ final class CreateAppointmentAction
             $this->attachParticipant->execute($appointment, $participant);
         }
 
+        foreach ($data->contacts as $contact) {
+            $appointment->addContact($contact);
+        }
+
+        if ($data->approval !== null) {
+            $this->openApprovalRequest($appointment, $data->approval);
+        }
+
         return $appointment->load('participants');
+    }
+
+    /**
+     * Open an approvals-engine request for the appointment. A named workflow preset
+     * wins first, then an explicit staged pipeline, then the flat approver set.
+     */
+    private function openApprovalRequest(Appointment $appointment, AppointmentApprovalData $approval): void
+    {
+        if ($approval->workflow !== null) {
+            $approvers = $approval->stageApprovers !== [] ? $approval->stageApprovers : $approval->approvers;
+
+            Approvals::for($appointment)->workflow($approval->workflow)->request($approvers);
+
+            return;
+        }
+
+        if ($approval->stages !== []) {
+            $appointment->requestStagedApproval($approval->stages, $approval->rejectOnStageRejection);
+
+            return;
+        }
+
+        if ($approval->approvers === []) {
+            return;
+        }
+
+        $appointment->requestApproval($approval->approvers, $approval->rule, $approval->quorum);
     }
 
     private function endsAt(CarbonImmutable $startsAt, ?int $durationMinutes): CarbonImmutable

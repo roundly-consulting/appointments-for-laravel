@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Reviews\DatabaseVerifiedAttendanceResolver;
 
 return [
     /*
@@ -85,5 +86,38 @@ return [
     */
     'recurrence' => [
         'max_occurrences' => 365,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reviews
+    |--------------------------------------------------------------------------
+    |
+    | Post-appointment reviews are provided by reviews-for-laravel. The resolver
+    | decides whether a review is "verified" — by default an author is verified
+    | only when they are a participant of a Completed appointment. Set
+    | "require_verified_attendance" to reject reviews from unverified authors
+    | outright instead of merely marking them unverified.
+    |
+    */
+    'reviews' => [
+        'verified_attendance_resolver' => DatabaseVerifiedAttendanceResolver::class,
+        'require_verified_attendance' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approvals
+    |--------------------------------------------------------------------------
+    |
+    | Booking-request sign-off is provided by approvals-for-laravel. An
+    | appointment opted into a workflow (via requireApprovalFrom()) starts
+    | Pending and is confirmed/declined/cancelled as its approval request
+    | resolves. "enforce_transitions" keeps the status-sync listener inside the
+    | appointment's own transition matrix; disable it to force the mapped state.
+    |
+    */
+    'approvals' => [
+        'enforce_transitions' => false,
     ],
 ];

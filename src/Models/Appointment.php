@@ -18,8 +18,17 @@ use RoundlyConsulting\Appointments\Database\Factories\AppointmentFactory;
 use RoundlyConsulting\Appointments\Enums\Status;
 use RoundlyConsulting\Appointments\Events\AppointmentCreated;
 use RoundlyConsulting\Appointments\Events\AppointmentUpdated;
+use RoundlyConsulting\Appointments\Exceptions\CannotReviewAppointmentException;
 use RoundlyConsulting\Appointments\Models\Concerns\HasAppointmentScopes;
+use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
+use RoundlyConsulting\Approvals\Traits\RequiresApproval;
+use RoundlyConsulting\Contacts\Concerns\HasContacts;
+use RoundlyConsulting\Geolocation\Casts\CoordinatesCast;
+use RoundlyConsulting\Geolocation\Concerns\HasLocation;
+use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
+use RoundlyConsulting\Reviews\Concerns\HasReviews;
+use RoundlyConsulting\Reviews\Support\PendingReview;
 
 /**
  * @property int $id
@@ -28,6 +37,10 @@ use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
  * @property Status $status
  * @property ?Collection<array-key, mixed> $meta
  * @property ?string $timezone
+ * @property ?string $location
+ * @property ?float $latitude
+ * @property ?float $longitude
+ * @property ?Coordinates $coordinates
  * @property CarbonInterface $starts_at
  * @property ?CarbonInterface $ends_at
  * @property ?int $duration_minutes
@@ -39,10 +52,14 @@ use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
 final class Appointment extends Model
 {
     use HasAppointmentScopes;
+    use HasContacts;
 
     /** @use HasFactory<AppointmentFactory> */
     use HasFactory;
 
+    use HasLocation;
+    use HasReviews;
+    use RequiresApproval;
     use SoftDeletes;
 
     protected $guarded = [];
@@ -160,6 +177,37 @@ final class Appointment extends Model
         return app(IcsGenerator::class)->forAppointment($this);
     }
 
+    /**
+     * Great-circle distance in kilometres from this appointment's venue to a point,
+     * or null when the appointment has no coordinates.
+     */
+    public function distanceFrom(Coordinates $point): ?float
+    {
+        $coordinates = $this->coordinates;
+
+        if ($coordinates === null) {
+            return null;
+        }
+
+        return $coordinates->distanceTo($point) / 1000;
+    }
+
+    /**
+     * Open a review of this appointment by the given author. The review is stamped
+     * "verified" when the author's attendance checks out via the configured
+     * VerifiedAttendanceResolver.
+     */
+    public function review(Model $author): PendingReview
+    {
+        $verified = app(VerifiedAttendanceResolver::class)->verified($author, $this);
+
+        if (! $verified && (bool) config('appointments.reviews.require_verified_attendance', false)) {
+            throw CannotReviewAppointmentException::unverifiedAttendance($this);
+        }
+
+        return $this->addReview($author)->verified($verified);
+    }
+
     private function syncEndsAt(): void
     {
         if ($this->ends_at !== null) {
@@ -184,6 +232,9 @@ final class Appointment extends Model
         return [
             'status' => Status::class,
             'meta' => 'collection',
+            'coordinates' => CoordinatesCast::class,
+            'latitude' => 'float',
+            'longitude' => 'float',
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
             'duration_minutes' => 'integer',

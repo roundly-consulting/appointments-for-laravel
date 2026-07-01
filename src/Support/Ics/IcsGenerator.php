@@ -81,8 +81,20 @@ final class IcsGenerator
             $lines[] = 'LOCATION:'.$this->escape($location);
         }
 
+        $coordinates = $appointment->coordinates;
+
+        if ($coordinates !== null) {
+            $lines[] = sprintf('GEO:%s;%s', $this->coordinate($coordinates->latitude), $this->coordinate($coordinates->longitude));
+        }
+
+        $organizer = $this->organizerEmail($appointment);
+
+        if ($organizer !== null) {
+            $lines[] = $this->calendarUser('ORGANIZER', $organizer['name'], $organizer['email']);
+        }
+
         foreach ($this->attendees($appointment) as $attendee) {
-            $lines[] = 'ATTENDEE:'.$this->escape($attendee);
+            $lines[] = $attendee;
         }
 
         $lines[] = 'END:VEVENT';
@@ -111,9 +123,29 @@ final class IcsGenerator
 
     private function location(Appointment $appointment): ?string
     {
+        if ($appointment->location !== null && $appointment->location !== '') {
+            return $appointment->location;
+        }
+
         $location = $appointment->meta?->get('location');
 
         return is_string($location) ? $location : null;
+    }
+
+    /**
+     * The appointment's booking contact, used as the calendar ORGANIZER.
+     *
+     * @return array{name: ?string, email: string}|null
+     */
+    private function organizerEmail(Appointment $appointment): ?array
+    {
+        $contact = $appointment->primaryEmail();
+
+        if ($contact === null) {
+            return null;
+        }
+
+        return ['name' => $contact->name ?? $contact->label, 'email' => $contact->value];
     }
 
     /**
@@ -121,17 +153,77 @@ final class IcsGenerator
      */
     private function attendees(Appointment $appointment): array
     {
-        $names = [];
+        $lines = [];
 
         foreach ($appointment->participants as $participant) {
             $related = $participant->participant;
 
-            if ($related instanceof Model) {
-                $names[] = sprintf('%s:%s', $related->getMorphClass(), $related->getKey());
+            if (! $related instanceof Model) {
+                continue;
             }
+
+            $email = $this->primaryEmailOf($related);
+
+            if ($email !== null) {
+                $lines[] = $this->calendarUser('ATTENDEE', $this->displayName($related), $email);
+
+                continue;
+            }
+
+            $lines[] = 'ATTENDEE:'.$this->escape(sprintf('%s:%s', $related->getMorphClass(), $related->getKey()));
         }
 
-        return $names;
+        return $lines;
+    }
+
+    /**
+     * A participant's primary contact email, when its related model carries contacts.
+     */
+    private function primaryEmailOf(Model $model): ?string
+    {
+        if (! method_exists($model, 'primaryEmail')) {
+            return null;
+        }
+
+        $contact = $model->primaryEmail();
+
+        return $contact?->value;
+    }
+
+    private function displayName(Model $model): ?string
+    {
+        $name = $model->getAttribute('name');
+
+        return is_string($name) && $name !== '' ? $name : null;
+    }
+
+    /**
+     * Build an ORGANIZER/ATTENDEE line with an optional CN parameter and a mailto value.
+     */
+    private function calendarUser(string $property, ?string $name, string $email): string
+    {
+        $params = $name !== null && $name !== '' ? ';CN='.$this->param($name) : '';
+
+        return $property.$params.':mailto:'.$this->param($email, quote: false);
+    }
+
+    /**
+     * Sanitise an iCalendar parameter value, quoting it when it carries separators.
+     */
+    private function param(string $value, bool $quote = true): string
+    {
+        $clean = str_replace(["\r", "\n", '"'], '', $value);
+
+        if ($quote && (str_contains($clean, ':') || str_contains($clean, ';') || str_contains($clean, ','))) {
+            return '"'.$clean.'"';
+        }
+
+        return $clean;
+    }
+
+    private function coordinate(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 6, '.', ''), '0'), '.');
     }
 
     private function escape(string $value): string

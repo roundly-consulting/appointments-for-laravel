@@ -6,12 +6,15 @@ namespace RoundlyConsulting\Appointments\DataTransferObjects;
 
 use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\Enums\Status;
+use RoundlyConsulting\Contacts\DataTransferObjects\ContactData;
+use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
 
 final readonly class AppointmentData
 {
     /**
      * @param  array<string, mixed>|null  $meta
      * @param  list<ParticipantData>  $participants
+     * @param  list<ContactData>  $contacts
      */
     public function __construct(
         public string $name,
@@ -24,5 +27,9 @@ final readonly class AppointmentData
         public array $participants = [],
         public ?RecurrenceData $recurrence = null,
         public bool $preventConflicts = false,
+        public ?string $location = null,
+        public ?Coordinates $coordinates = null,
+        public array $contacts = [],
+        public ?AppointmentApprovalData $approval = null,
     ) {}
 }
