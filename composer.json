@@ -16,9 +16,26 @@
         }
     ],
     "require": {
-        "php": "^8.3",
-        "illuminate/contracts": "^12.0|^13.0"
+        "php": "^8.4",
+        "illuminate/contracts": "^12.0|^13.0",
+        "roundly-consulting/approvals-for-laravel": "@dev",
+        "roundly-consulting/contacts-for-laravel": "@dev",
+        "roundly-consulting/enums-for-laravel": "@dev",
+        "roundly-consulting/geolocation-for-laravel": "@dev",
+        "roundly-consulting/reviews-for-laravel": "@dev"
     },
+    "repositories": [
+        { "type": "path", "url": "../enums-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/enums-for-laravel", "no-api": true },
+        { "type": "path", "url": "../approvals-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/approvals-for-laravel", "no-api": true },
+        { "type": "path", "url": "../geolocation-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/geolocation-for-laravel", "no-api": true },
+        { "type": "path", "url": "../contacts-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/contacts-for-laravel", "no-api": true },
+        { "type": "path", "url": "../reviews-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/reviews-for-laravel", "no-api": true }
+    ],
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.0",
