@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Appointments\Enums;
 
+use RoundlyConsulting\Enums\Helpers;
+
 enum Status: string
 {
+    use Helpers;
+
     case Pending = 'pending';
     case Confirmed = 'confirmed';
     case Cancelled = 'cancelled';
@@ -16,11 +20,6 @@ enum Status: string
     public static function default(): self
     {
         return self::Pending;
-    }
-
-    public function label(): string
-    {
-        return (string) trans('appointments::status.'.$this->value);
     }
 
     public function color(): string
