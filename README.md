@@ -11,12 +11,13 @@
 A scheduling toolkit for Laravel: create appointments with durations, end times, and time
 zones; attach participants of any Eloquent model via a polymorphic relationship; detect
 double-bookings; drive a guarded status lifecycle; generate recurring series; and export
-standards-compliant calendar (`.ics`) files. Built on a native service provider with only
-Laravel as a runtime dependency.
+standards-compliant calendar (`.ics`) files. Built on a native service provider, it also
+builds on the roundly-consulting provider packages for venue geolocation, guest contacts,
+post-visit reviews, and a booking-approval workflow (see **Integrates with** below).
 
 ## Requirements
 
-- PHP `^8.3`
+- PHP `^8.4`
 - Laravel `^12.0` or `^13.0`
 
 ## Installation
@@ -40,14 +41,12 @@ Optionally publish the config file:
 php artisan vendor:publish --tag="appointments-config"
 ```
 
-Optionally publish the language files (status and role labels) to customise or translate them:
+Status, role, and frequency labels come from the `enums-for-laravel` `Helpers` trait
+(`readable()` / `labels()` / `options()`), so there are no language files to publish — override
+labels through the enums translation seam instead.
 
-```bash
-php artisan vendor:publish --tag="appointments-translations"
-```
-
-The package's migrations and translations are auto-discovered, so publishing is only needed
-when you want to customise them.
+The package's migrations are auto-discovered, so publishing is only needed when you want to
+customise them.
 
 ## Configuration
 
@@ -67,6 +66,13 @@ return [
     'recurrence' => [
         'max_occurrences' => 365,
     ],
+    'reviews' => [
+        'verified_attendance_resolver' => DatabaseVerifiedAttendanceResolver::class,
+        'require_verified_attendance' => false,
+    ],
+    'approvals' => [
+        'enforce_transitions' => false,
+    ],
 ];
 ```
 
@@ -80,6 +86,9 @@ return [
 | `default_duration_minutes` | `int` | `60` | Duration applied when none is supplied, used to derive `ends_at` from `starts_at`. |
 | `prevent_conflicts` | `bool` | `false` | When `true`, creating or rescheduling throws on an overlapping booking for a participant. Can also be enabled per call. |
 | `recurrence.max_occurrences` | `int` | `365` | Hard cap on the number of occurrences a recurring series may expand to. |
+| `reviews.verified_attendance_resolver` | `class-string` | `DatabaseVerifiedAttendanceResolver` | Resolver that decides whether a review is verified (default: author is a participant of a Completed appointment). |
+| `reviews.require_verified_attendance` | `bool` | `false` | When `true`, `review()` throws for an unverified author instead of storing an unverified review. |
+| `approvals.enforce_transitions` | `bool` | `false` | When `true`, the approval status-sync listener respects the appointment transition matrix (a mapped-but-illegal move is skipped). |
 
 ## Usage
 
@@ -153,8 +162,10 @@ $appointment->complete();   // confirmed → completed
 $appointment->decline();    // pending → declined
 $appointment->markNoShow(); // confirmed → no_show
 
-$appointment->status->label(); // "Confirmed" (translatable via appointments::status.*)
-$appointment->status->color(); // a colour token for UI badges
+$appointment->status->label();  // "Confirmed" (from the enums Helpers trait)
+$appointment->status->color();  // a colour token for UI badges
+Status::options();               // value/label option DTOs for a <select>
+Status::validationRule();        // "in:pending,confirmed,cancelled,completed,declined,no_show"
 ```
 
 Allowed transitions:
@@ -275,6 +286,112 @@ Both models use soft deletes, so deleting an appointment or participant retains 
 | `RoundlyConsulting\Appointments\Events\ParticipantCreated` | a participant is created |
 | `RoundlyConsulting\Appointments\Events\ParticipantUpdated` | a participant is updated |
 | `RoundlyConsulting\Appointments\Events\ParticipantDeleted` | a participant is deleted |
+
+## Integrates with
+
+Appointments hard-requires four roundly-consulting provider packages and wires them into the
+bundled `Appointment` model. If you swap the model via `config('appointments.model')`, re-add
+the traits (`HasLocation`, `HasContacts`, `HasReviews`, `RequiresApproval`) to your subclass.
+
+| Provider | What it adds |
+|---|---|
+| `enums-for-laravel` | `Status` / `ParticipantRole` / `Frequency` gain `values()`/`labels()`/`options()`/`validationRule()`/`readable()`. |
+| `geolocation-for-laravel` | Venue coordinates, a `withinRadius` scope, a distance helper, and an ICS `GEO` line. |
+| `contacts-for-laravel` | Guest/booking email & phone contacts and ICS `ATTENDEE`/`ORGANIZER` `mailto:` lines. |
+| `approvals-for-laravel` | A booking-approval workflow that drives the appointment status. |
+| `reviews-for-laravel` | Post-visit reviews and rating summaries, gated by verified attendance. |
+
+### Venue location (geolocation)
+
+```php
+use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
+
+$appointment = Appointments::for('Clinic visit')
+    ->startingAt('2026-07-01 09:00')
+    ->located(51.5074, -0.1278, 'Clinic A')   // latitude, longitude, venue name
+    ->create();
+
+$appointment->coordinates;                     // Coordinates value object (or null)
+$appointment->distanceFrom(new Coordinates(48.8566, 2.3522)); // kilometres, or null
+
+Appointment::query()->withinRadius(new Coordinates(51.5074, -0.1278), 10)->get();
+```
+
+The ICS export prefers the first-class `location` column (falling back to `meta.location`) and
+emits a `GEO:lat;lng` line when coordinates are present.
+
+### Guest contacts (contacts)
+
+```php
+$appointment = Appointments::for('Guest booking')
+    ->startingAt('2026-07-01 09:00')
+    ->withContactEmail('guest@example.com')
+    ->withContactPhone('+441234567890')
+    ->create();
+
+$appointment->primaryEmail()?->value;          // "guest@example.com"
+$appointment->addEmail('other@example.com');
+```
+
+A participant (or the appointment) that exposes a primary email upgrades its ICS line to
+`ATTENDEE;CN="…":mailto:…`; the appointment's booking contact becomes the calendar `ORGANIZER`.
+
+### Booking approval workflow (approvals)
+
+Opt a booking into confirmation sign-off. The appointment is created `pending` and a
+`SyncAppointmentStatusFromApproval` listener moves it as the approval request resolves:
+Approved → `confirmed`, Rejected → `declined`, Cancelled/Expired → `cancelled`.
+
+```php
+use RoundlyConsulting\Approvals\Enums\ApprovalRule;
+use RoundlyConsulting\Approvals\Facades\Approvals;
+
+$appointment = Appointments::for('Booking request')
+    ->startingAt('2026-07-01 09:00')
+    ->requireApprovalFrom([$organiser, $clinician], ApprovalRule::Quorum, quorum: 1)
+    ->create();
+
+Approvals::for($appointment)->as($organiser)->approve();   // → confirmed
+```
+
+Staged pipelines and named workflow presets are supported too:
+
+```php
+use RoundlyConsulting\Approvals\DataTransferObjects\StageDefinition;
+
+Appointments::for('Two-desk booking')
+    ->startingAt('2026-07-01 09:00')
+    ->approvalStages([
+        new StageDefinition([$reception]),
+        new StageDefinition([$clinician]),
+    ])
+    ->create();
+
+Appointments::for('Preset booking')
+    ->startingAt('2026-07-01 09:00')
+    ->approvalWorkflow('clinic')                 // config('approvals.workflows.clinic')
+    ->approvalStageApprovers([[$reception], [$clinician]])
+    ->create();
+```
+
+Approver models use the approvals `GivesApprovals` trait. The `appointments:expire-approvals`
+command lapses expired decisions.
+
+### Post-visit reviews (reviews)
+
+Appointments are reviewable. A review by a participant of a Completed appointment is stamped
+verified; anyone else stays unverified (or is rejected when
+`reviews.require_verified_attendance` is on). Aggregates count approved reviews only.
+
+```php
+$review = $appointment->review($attendee)->rating(5)->content('Great')->create();
+
+$appointment->averageRating();
+$appointment->ratingSummary();          // RatingSummary DTO
+$appointment->approvedReviewsCount();
+```
+
+Author models use the reviews `CanReview` trait.
 
 ### Backward compatibility
 
