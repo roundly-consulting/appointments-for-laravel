@@ -393,12 +393,6 @@ $appointment->approvedReviewsCount();
 
 Author models use the reviews `CanReview` trait.
 
-### Backward compatibility
-
-The original `AppointmentsService` (`create()` / `addParticipantToAppointment()`) is retained
-as a deprecated shim that delegates to the new actions. New code should use the facade,
-builder, or action classes.
-
 ## Testing
 
 ```bash
