@@ -88,6 +88,58 @@ it('includes a location from meta and attendee lines from participants', functio
     expect($ics)->toContain('LOCATION:HQ')->toContain('ATTENDEE:');
 });
 
+it('prefers the location column and emits a GEO line', function (): void {
+    $appointment = Appointment::factory()->create([
+        'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
+        'duration_minutes' => 60,
+        'meta' => ['location' => 'Old meta venue'],
+        'location' => 'Clinic A',
+        'latitude' => 51.5074,
+        'longitude' => -0.1278,
+    ]);
+
+    $ics = $appointment->toIcs();
+
+    expect($ics)->toContain('LOCATION:Clinic A')
+        ->not->toContain('Old meta venue')
+        ->and($ics)->toContain('GEO:51.5074;-0.1278');
+});
+
+it('upgrades an attendee to a mailto line when the participant has a contact email', function (): void {
+    $attendee = User::create();
+    $attendee->addEmail('attendee@example.com', primary: true);
+
+    $appointment = Appointment::factory()->create([
+        'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
+        'duration_minutes' => 60,
+    ]);
+    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData($attendee));
+    $appointment->load('participants');
+
+    expect($appointment->toIcs())->toContain('ATTENDEE:mailto:attendee@example.com');
+});
+
+it('emits an ORGANIZER line from the appointment booking contact', function (): void {
+    $appointment = Appointment::factory()->create([
+        'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
+        'duration_minutes' => 60,
+    ]);
+    $appointment->addEmail('organiser@example.com', primary: true);
+
+    expect($appointment->toIcs())->toContain('ORGANIZER:mailto:organiser@example.com');
+});
+
+it('falls back to a type:id attendee when no contact email exists', function (): void {
+    $appointment = Appointment::factory()->create([
+        'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
+        'duration_minutes' => 60,
+    ]);
+    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData(User::create()));
+    $appointment->load('participants');
+
+    expect($appointment->toIcs())->toMatch('/ATTENDEE:[^\r\n]+:\d+/');
+});
+
 it('builds a calendar from a collection of appointments', function (): void {
     Appointment::factory()->count(2)->create([
         'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
