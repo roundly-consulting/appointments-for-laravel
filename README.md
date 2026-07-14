@@ -90,6 +90,12 @@ return [
 | `reviews.require_verified_attendance` | `bool` | `false` | When `true`, `review()` throws for an unverified author instead of storing an unverified review. |
 | `approvals.enforce_transitions` | `bool` | `false` | When `true`, the approval status-sync listener respects the appointment transition matrix (a mapped-but-illegal move is skipped). |
 
+The effective configuration is summarised in Laravel's `about` command:
+
+```bash
+php artisan about --only=appointments
+```
+
 ## Usage
 
 ### Creating an appointment (fluent builder)
@@ -289,12 +295,14 @@ Both models use soft deletes, so deleting an appointment or participant retains 
 
 ## Integrates with
 
-Appointments hard-requires four roundly-consulting provider packages and wires them into the
-bundled `Appointment` model. If you swap the model via `config('appointments.model')`, re-add
-the traits (`HasLocation`, `HasContacts`, `HasReviews`, `RequiresApproval`) to your subclass.
+Appointments hard-requires five roundly-consulting provider packages and wires them into the
+bundled `Appointment` model. If you swap the model via `config('appointments.model')`, extend
+the packaged model — the traits (`HasLocation`, `HasContacts`, `HasReviews`, `RequiresApproval`)
+come with it.
 
 | Provider | What it adds |
 |---|---|
+| `package-toolkit-for-laravel` | The package's service provider, publish groups and `php artisan about --only=appointments` section, plus model resolution from config. |
 | `enums-for-laravel` | `Status` / `ParticipantRole` / `Frequency` gain `values()`/`labels()`/`options()`/`validationRule()`/`readable()`. |
 | `geolocation-for-laravel` | Venue coordinates, a `withinRadius` scope, a distance helper, and an ICS `GEO` line. |
 | `contacts-for-laravel` | Guest/booking email & phone contacts and ICS `ATTENDEE`/`ORGANIZER` `mailto:` lines. |
