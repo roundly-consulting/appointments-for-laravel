@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Appointments\Tests;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\ServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use ReflectionClass;
 use RoundlyConsulting\Appointments\AppointmentsServiceProvider;
@@ -53,62 +53,42 @@ abstract class TestCase extends Orchestra
         ]);
     }
 
-    protected function getEnvironmentSetUp($app): void
+    /**
+     * No package auto-loads its migrations (they are publish-only), so the suite runs
+     * them itself — exactly like a host app does after publishing. Every provider's
+     * schema is loaded by *directory*: each directory's filenames already sort into
+     * dependency order, and naming the files here would break the moment a provider
+     * renames one.
+     */
+    protected function defineDatabaseMigrations(): void
     {
-        $this->defineEnvironment($app);
-
-        $this->loadProviderSchema();
-
-        foreach (glob(__DIR__.'/../database/migrations/*.php') ?: [] as $file) {
-            $migration = include $file;
-
-            if ($migration instanceof Migration) {
-                $migration->up();
-            }
+        // approvals backs the appointment approval flow; contacts backs attendee lookups;
+        // reviews backs post-appointment reviews, and its summary query reads media-library's
+        // `media` table even when no review carries an attachment.
+        foreach ([
+            ApprovalsServiceProvider::class,
+            ContactsServiceProvider::class,
+            MediaLibraryServiceProvider::class,
+            ReviewsServiceProvider::class,
+        ] as $provider) {
+            $this->loadMigrationsFrom($this->migrationsPathFor($provider));
         }
+
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         Schema::create('users', fn (Blueprint $table) => $table->id());
     }
 
     /**
-     * Run the provider migrations the appointment integrations depend on, each in
-     * dependency order, from their own package directories.
+     * A provider package's migrations directory, resolved from wherever composer put it
+     * (a symlinked path repository locally, a real install from VCS on CI).
+     *
+     * @param  class-string<ServiceProvider>  $provider
      */
-    private function loadProviderSchema(): void
+    private function migrationsPathFor(string $provider): string
     {
-        $migrations = [
-            ApprovalsServiceProvider::class => [
-                'create_approvals_table',
-                'create_approval_requests_table',
-                'add_v11_columns_to_approvals_table',
-                'add_staging_to_approval_requests_table',
-                'create_approval_request_stages_table',
-                'create_approval_delegations_table',
-            ],
-            ContactsServiceProvider::class => [
-                'create_contacts_table',
-            ],
-            // reviews-for-laravel attaches media to reviews, so its summary query
-            // reads the media table even when no review has an attachment.
-            MediaLibraryServiceProvider::class => [
-                '0001_01_01_000000_create_media_table',
-            ],
-            ReviewsServiceProvider::class => [
-                'create_reviews_table',
-                'create_review_votes_table',
-            ],
-        ];
+        $base = dirname((string) (new ReflectionClass($provider))->getFileName(), 2);
 
-        foreach ($migrations as $provider => $names) {
-            $base = dirname((string) (new ReflectionClass($provider))->getFileName(), 2);
-
-            foreach ($names as $name) {
-                $migration = require "{$base}/database/migrations/{$name}.php";
-
-                if ($migration instanceof Migration) {
-                    $migration->up();
-                }
-            }
-        }
+        return $base.'/database/migrations';
     }
 }
