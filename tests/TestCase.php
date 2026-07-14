@@ -14,6 +14,7 @@ use RoundlyConsulting\Appointments\AppointmentsServiceProvider;
 use RoundlyConsulting\Approvals\ApprovalsServiceProvider;
 use RoundlyConsulting\Contacts\ContactsServiceProvider;
 use RoundlyConsulting\Geolocation\GeolocationServiceProvider;
+use RoundlyConsulting\MediaLibrary\MediaLibraryServiceProvider;
 use RoundlyConsulting\Reviews\ReviewsServiceProvider;
 
 abstract class TestCase extends Orchestra
@@ -36,6 +37,7 @@ abstract class TestCase extends Orchestra
             ApprovalsServiceProvider::class,
             ContactsServiceProvider::class,
             GeolocationServiceProvider::class,
+            MediaLibraryServiceProvider::class,
             ReviewsServiceProvider::class,
             AppointmentsServiceProvider::class,
         ];
@@ -85,6 +87,11 @@ abstract class TestCase extends Orchestra
             ],
             ContactsServiceProvider::class => [
                 'create_contacts_table',
+            ],
+            // reviews-for-laravel attaches media to reviews, so its summary query
+            // reads the media table even when no review has an attachment.
+            MediaLibraryServiceProvider::class => [
+                '0001_01_01_000000_create_media_table',
             ],
             ReviewsServiceProvider::class => [
                 'create_reviews_table',

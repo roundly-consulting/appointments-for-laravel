@@ -22,9 +22,12 @@
         "roundly-consulting/contacts-for-laravel": "@dev",
         "roundly-consulting/enums-for-laravel": "@dev",
         "roundly-consulting/geolocation-for-laravel": "@dev",
+        "roundly-consulting/package-toolkit-for-laravel": "@dev",
         "roundly-consulting/reviews-for-laravel": "@dev"
     },
     "repositories": [
+        { "type": "path", "url": "../package-toolkit-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/package-toolkit-for-laravel", "no-api": true },
         { "type": "path", "url": "../enums-for-laravel*", "options": { "symlink": true } },
         { "type": "vcs", "url": "https://github.com/roundly-consulting/enums-for-laravel", "no-api": true },
         { "type": "path", "url": "../approvals-for-laravel*", "options": { "symlink": true } },
@@ -34,7 +37,15 @@
         { "type": "path", "url": "../contacts-for-laravel*", "options": { "symlink": true } },
         { "type": "vcs", "url": "https://github.com/roundly-consulting/contacts-for-laravel", "no-api": true },
         { "type": "path", "url": "../reviews-for-laravel*", "options": { "symlink": true } },
-        { "type": "vcs", "url": "https://github.com/roundly-consulting/reviews-for-laravel", "no-api": true }
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/reviews-for-laravel", "no-api": true },
+        { "type": "path", "url": "../addresses-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/addresses-for-laravel", "no-api": true },
+        { "type": "path", "url": "../connections-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/connections-for-laravel", "no-api": true },
+        { "type": "path", "url": "../media-library-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/media-library-for-laravel", "no-api": true },
+        { "type": "path", "url": "../http-client-rate-limits-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/http-client-rate-limits-for-laravel", "no-api": true }
     ],
     "require-dev": {
         "larastan/larastan": "^3.0",
@@ -83,6 +94,6 @@
             }
         }
     },
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "prefer-stable": true
 }
