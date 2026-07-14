@@ -9,6 +9,7 @@ use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentApprovalData;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
+use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
 use RoundlyConsulting\Approvals\Facades\Approvals;
 
@@ -28,11 +29,9 @@ final class CreateAppointmentAction
 
         $this->guardAgainstConflicts($data, $startsAt, $endsAt);
 
-        /** @var class-string<Appointment> $model */
-        $model = config('appointments.model', Appointment::class);
+        $model = AppointmentModel::class();
 
-        /** @var Appointment $appointment */
-        $appointment = (new $model)->newQuery()->create([
+        $appointment = $model::query()->create([
             'name' => $data->name,
             'description' => $data->description,
             'status' => $data->status,

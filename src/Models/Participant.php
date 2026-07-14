@@ -14,6 +14,7 @@ use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 use RoundlyConsulting\Appointments\Events\ParticipantCreated;
 use RoundlyConsulting\Appointments\Events\ParticipantDeleted;
 use RoundlyConsulting\Appointments\Events\ParticipantUpdated;
+use RoundlyConsulting\Appointments\Support\AppointmentModel;
 
 /**
  * @property int $appointment_id
@@ -24,8 +25,11 @@ use RoundlyConsulting\Appointments\Events\ParticipantUpdated;
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
  * @property ?CarbonInterface $deleted_at
+ *
+ * Deliberately not final: `appointments.participant` invites host apps to swap
+ * in their own model extending this one.
  */
-final class Participant extends Model
+class Participant extends Model
 {
     use SoftDeletes;
 
@@ -55,14 +59,11 @@ final class Participant extends Model
     }
 
     /**
-     * @return BelongsTo<Model, $this>
+     * @return BelongsTo<Appointment, $this>
      */
     public function appointment(): BelongsTo
     {
-        /** @var class-string<Model> $model */
-        $model = config('appointments.model', Appointment::class);
-
-        return $this->belongsTo($model);
+        return $this->belongsTo(AppointmentModel::class());
     }
 
     /**

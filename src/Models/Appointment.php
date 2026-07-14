@@ -22,6 +22,7 @@ use RoundlyConsulting\Appointments\Exceptions\CannotReviewAppointmentException;
 use RoundlyConsulting\Appointments\Models\Concerns\HasAppointmentScopes;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
+use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Approvals\Traits\RequiresApproval;
 use RoundlyConsulting\Contacts\Concerns\HasContacts;
 use RoundlyConsulting\Geolocation\Casts\CoordinatesCast;
@@ -48,8 +49,11 @@ use RoundlyConsulting\Reviews\Support\PendingReview;
  * @property CarbonInterface $created_at
  * @property CarbonInterface $updated_at
  * @property ?CarbonInterface $deleted_at
+ *
+ * Deliberately not final: `appointments.model` invites host apps to swap in
+ * their own model extending this one.
  */
-final class Appointment extends Model
+class Appointment extends Model
 {
     use HasAppointmentScopes;
     use HasContacts;
@@ -82,10 +86,9 @@ final class Appointment extends Model
      */
     public function participants(): HasMany
     {
-        /** @var class-string<Participant> $model */
-        $model = config('appointments.participant', Participant::class);
-
-        return $this->hasMany($model);
+        // The foreign key is named explicitly: a host model configured on
+        // `appointments.model` would otherwise derive it from its own class name.
+        return $this->hasMany(ParticipantModel::class(), 'appointment_id');
     }
 
     public function duration(): CarbonInterval

@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Support\AppointmentModel;
+use RoundlyConsulting\Appointments\Support\ParticipantModel;
 
 /**
  * Host models (User, Contact, Room, …) use this trait to expose their
@@ -25,10 +27,7 @@ trait HasAppointments
      */
     public function appointmentParticipations(): MorphMany
     {
-        /** @var class-string<Participant> $model */
-        $model = config('appointments.participant', Participant::class);
-
-        return $this->morphMany($model, 'participant');
+        return $this->morphMany(ParticipantModel::class(), 'participant');
     }
 
     /**
@@ -38,8 +37,7 @@ trait HasAppointments
      */
     public function appointments(): Builder
     {
-        /** @var class-string<Appointment> $model */
-        $model = config('appointments.model', Appointment::class);
+        $model = AppointmentModel::class();
 
         return $model::query()->forParticipant($this);
     }

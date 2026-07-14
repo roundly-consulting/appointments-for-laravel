@@ -27,8 +27,7 @@ final class ConflictDetector
         CarbonInterface $end,
         ?Appointment $ignore = null,
     ): Collection {
-        /** @var class-string<Appointment> $model */
-        $model = config('appointments.model', Appointment::class);
+        $model = AppointmentModel::class();
 
         $query = $model::query()
             ->forParticipant($participant)
