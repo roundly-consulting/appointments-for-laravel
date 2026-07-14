@@ -35,6 +35,11 @@ php artisan vendor:publish --tag="appointments-migrations"
 php artisan migrate
 ```
 
+The package does **not** load its migrations automatically — publishing them is required, and
+`php artisan migrate` alone will not create the tables. Once published, the migrations are yours:
+they live in your `database/migrations` directory and run in the order they were published
+(appointments, then participants, then the location columns).
+
 Optionally publish the config file:
 
 ```bash
@@ -44,9 +49,6 @@ php artisan vendor:publish --tag="appointments-config"
 Status, role, and frequency labels come from the `enums-for-laravel` `Helpers` trait
 (`readable()` / `labels()` / `options()`), so there are no language files to publish — override
 labels through the enums translation seam instead.
-
-The package's migrations are auto-discovered, so publishing is only needed when you want to
-customise them.
 
 ## Configuration
 
