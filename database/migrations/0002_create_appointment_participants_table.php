@@ -15,7 +15,7 @@ return new class extends Migration
             $table->foreignId('appointment_id');
             $table->morphs('participant');
             $table->string('role')->nullable();
-            $table->json('meta')->nullable();
+            $table->jsonb('meta')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

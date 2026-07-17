@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->text('description')->nullable();
             $table->string('status')->default(Status::default()->value);
-            $table->json('meta')->nullable();
+            $table->jsonb('meta')->nullable();
             $table->string('timezone')->nullable();
             $table->timestamp('starts_at');
             $table->timestamp('ends_at')->nullable();
