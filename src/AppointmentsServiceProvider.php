@@ -12,11 +12,14 @@ use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Approvals\Events\ApprovalRequestResolved;
+use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 
 final class AppointmentsServiceProvider extends PackageServiceProvider
 {
+    use RegistersBlueprintMacros;
+
     public function configurePackage(Package $package): void
     {
         $package
@@ -60,6 +63,10 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+        // The migrations' key-type-aware morph columns are macros, so they must
+        // exist before a host runs `php artisan migrate`.
+        $this->registerBlueprintMacros();
 
         Event::listen(ApprovalRequestResolved::class, SyncAppointmentStatusFromApproval::class);
     }
