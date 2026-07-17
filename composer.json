@@ -45,19 +45,22 @@
         { "type": "path", "url": "../media-library-for-laravel*", "options": { "symlink": true } },
         { "type": "vcs", "url": "https://github.com/roundly-consulting/media-library-for-laravel", "no-api": true },
         { "type": "path", "url": "../http-client-rate-limits-for-laravel*", "options": { "symlink": true } },
-        { "type": "vcs", "url": "https://github.com/roundly-consulting/http-client-rate-limits-for-laravel", "no-api": true }
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/http-client-rate-limits-for-laravel", "no-api": true },
+        { "type": "path", "url": "../testing-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/testing-for-laravel", "no-api": true }
     ],
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.0",
         "nunomaduro/collision": "^8.0",
         "orchestra/testbench": "^10.0|^11.0",
-        "pestphp/pest": "^3.0|^4.0",
-        "pestphp/pest-plugin-arch": "^3.0|^4.0",
-        "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
         "phpstan/extension-installer": "^1.1",
         "phpstan/phpstan-deprecation-rules": "^2.0",
-        "phpstan/phpstan-phpunit": "^2.0"
+        "phpstan/phpstan-phpunit": "^2.0",
+        "roundly-consulting/testing-for-laravel": "@dev"
     },
     "autoload": {
         "psr-4": {
