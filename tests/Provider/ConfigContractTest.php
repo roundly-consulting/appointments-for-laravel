@@ -32,6 +32,10 @@ it('ships exactly the config keys it reads', function (): void {
         'extraReadPrefixes' => [
             'appointments.model',
             'appointments.participant',
+            // Read through `KeyType::fromConfig('appointments.key_type')` in the
+            // participants migration, not a `config(` token, so the scraper needs
+            // it named here. It decides the shipped morph column types.
+            'appointments.key_type',
         ],
 
         // Deliberately NO `excludeFromReverse` for the provider. The testing README's own
