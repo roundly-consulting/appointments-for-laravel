@@ -11,7 +11,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create($this->table(), function (Blueprint $table): void {
+        Schema::create($this->appointmentsTable(), function (Blueprint $table): void {
             $table->id();
             $table->string('name');
             $table->text('description')->nullable();
@@ -31,7 +31,7 @@ return new class extends Migration
         });
     }
 
-    private function table(): string
+    private function appointmentsTable(): string
     {
         /** @var string $name */
         $name = config('appointments.table_names.appointments', 'appointments');

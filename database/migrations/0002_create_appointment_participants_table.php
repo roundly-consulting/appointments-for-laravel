@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create($this->table(), function (Blueprint $table): void {
+        Schema::create($this->participantsTable(), function (Blueprint $table): void {
             $table->id();
             $table->foreignId('appointment_id');
             $table->morphs('participant');
@@ -23,7 +23,7 @@ return new class extends Migration
         });
     }
 
-    private function table(): string
+    private function participantsTable(): string
     {
         /** @var string $name */
         $name = config('appointments.table_names.participants', 'appointment_participants');

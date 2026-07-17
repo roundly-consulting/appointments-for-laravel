@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table($this->table(), function (Blueprint $table): void {
+        Schema::table($this->appointmentsTable(), function (Blueprint $table): void {
             $table->string('location')->nullable()->after('timezone');
             $table->decimal('latitude', 10, 7)->nullable()->after('location');
             $table->decimal('longitude', 10, 7)->nullable()->after('latitude');
@@ -19,7 +19,7 @@ return new class extends Migration
         });
     }
 
-    private function table(): string
+    private function appointmentsTable(): string
     {
         /** @var string $name */
         $name = config('appointments.table_names.appointments', 'appointments');

@@ -64,9 +64,22 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
         Event::listen(ApprovalRequestResolved::class, SyncAppointmentStatusFromApproval::class);
     }
 
+    /**
+     * Literal keys rather than `config("appointments.table_names.{$key}")`: an interpolated
+     * key cannot be checked against the shipped config file, and an unverifiable read is how
+     * a package ends up reading a key it never ships (shops #18) or shipping one nothing
+     * reads (media #27's size cap that never applied). The match is exhaustive over the two
+     * tables the package owns, so a new table has to be named here rather than silently
+     * resolving to its own key. Same shape and same remedy as cosmos-foundation's
+     * rate_limiters match.
+     */
     private static function tableName(string $key): string
     {
-        $table = config("appointments.table_names.{$key}");
+        $table = match ($key) {
+            'appointments' => config('appointments.table_names.appointments'),
+            'participants' => config('appointments.table_names.participants'),
+            default => null,
+        };
 
         return is_string($table) && $table !== '' ? $table : $key;
     }
