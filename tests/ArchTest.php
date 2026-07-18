@@ -26,19 +26,18 @@ ArchPresets::strictTypes('RoundlyConsulting\Appointments');
  *    created/updated/deleted events extend (and the concrete events themselves, which are
  *    left open so a host swapping a model can carry its own).
  */
-ArchPresets::finalByDefault('RoundlyConsulting\Appointments')
-    ->ignoring([
-        Appointment::class,
-        Participant::class,
-        AppointmentsException::class,
-        AppointmentEvent::class,
-        ParticipantEvent::class,
-        'RoundlyConsulting\Appointments\Events\AppointmentCreated',
-        'RoundlyConsulting\Appointments\Events\AppointmentUpdated',
-        'RoundlyConsulting\Appointments\Events\ParticipantCreated',
-        'RoundlyConsulting\Appointments\Events\ParticipantUpdated',
-        'RoundlyConsulting\Appointments\Events\ParticipantDeleted',
-    ]);
+ArchPresets::finalByDefault('RoundlyConsulting\Appointments', [
+    Appointment::class,
+    Participant::class,
+    AppointmentsException::class,
+    AppointmentEvent::class,
+    ParticipantEvent::class,
+    'RoundlyConsulting\Appointments\Events\AppointmentCreated',
+    'RoundlyConsulting\Appointments\Events\AppointmentUpdated',
+    'RoundlyConsulting\Appointments\Events\ParticipantCreated',
+    'RoundlyConsulting\Appointments\Events\ParticipantUpdated',
+    'RoundlyConsulting\Appointments\Events\ParticipantDeleted',
+]);
 
 /**
  * The counter-weight, and the fleet's 7×-shipped fatal: `final` on a config-swappable model
