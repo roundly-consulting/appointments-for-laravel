@@ -36,6 +36,8 @@
         { "type": "vcs", "url": "https://github.com/roundly-consulting/geolocation-for-laravel", "no-api": true },
         { "type": "path", "url": "../contacts-for-laravel*", "options": { "symlink": true } },
         { "type": "vcs", "url": "https://github.com/roundly-consulting/contacts-for-laravel", "no-api": true },
+        { "type": "path", "url": "../crypto-for-laravel*", "options": { "symlink": true } },
+        { "type": "vcs", "url": "https://github.com/roundly-consulting/crypto-for-laravel", "no-api": true },
         { "type": "path", "url": "../reviews-for-laravel*", "options": { "symlink": true } },
         { "type": "vcs", "url": "https://github.com/roundly-consulting/reviews-for-laravel", "no-api": true },
         { "type": "path", "url": "../addresses-for-laravel*", "options": { "symlink": true } },
