@@ -223,7 +223,9 @@ $series = Appointments::for('Weekly standup')
 ```
 
 Each occurrence is materialised as its own appointment, linked by a shared `recurrence_group`
-UUID. Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval`, a `count` or
+UUID, and carries everything a single `create()` would — location, coordinates, guest contacts
+and its own approval request. The series is all-or-nothing: if any occurrence fails (e.g. a
+`SchedulingConflictException` under `preventConflicts()`), none of it is kept. Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval`, a `count` or
 `until` bound, and `byWeekday` filtering. Expansion is capped by `recurrence.max_occurrences`.
 
 ### Querying

@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
 use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
 use RoundlyConsulting\Appointments\Models\Appointment;
+use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\RecurrenceExpander;
 
 final class ScheduleRecurringAppointmentAction
@@ -22,35 +23,29 @@ final class ScheduleRecurringAppointmentAction
      * Materialise one appointment per occurrence, linked by a shared
      * recurrence group.
      *
+     * The series is all-or-nothing: if any occurrence fails (e.g. a
+     * SchedulingConflictException for a later week), none are kept.
+     *
      * @return Collection<int, Appointment>
      */
     public function execute(AppointmentData $data, RecurrenceData $rule): Collection
     {
-        $group = (string) Str::uuid();
-        $occurrences = $this->expander->expand($data->startsAt, $rule);
+        $model = AppointmentModel::class();
 
-        /** @var Collection<int, Appointment> $appointments */
-        $appointments = new Collection;
+        return (new $model)->getConnection()->transaction(function () use ($data, $rule): Collection {
+            $group = (string) Str::uuid();
 
-        foreach ($occurrences as $startsAt) {
-            $occurrence = new AppointmentData(
-                name: $data->name,
-                startsAt: $startsAt,
-                durationMinutes: $data->durationMinutes,
-                timezone: $data->timezone,
-                description: $data->description,
-                meta: $data->meta,
-                status: $data->status,
-                participants: $data->participants,
-                preventConflicts: $data->preventConflicts,
-            );
+            /** @var Collection<int, Appointment> $appointments */
+            $appointments = new Collection;
 
-            $appointment = $this->createAppointment->execute($occurrence);
-            $appointment->forceFill(['recurrence_group' => $group])->save();
+            foreach ($this->expander->expand($data->startsAt, $rule) as $startsAt) {
+                $appointment = $this->createAppointment->execute($data->forOccurrence($startsAt));
+                $appointment->forceFill(['recurrence_group' => $group])->save();
 
-            $appointments->push($appointment);
-        }
+                $appointments->push($appointment);
+            }
 
-        return $appointments;
+            return $appointments;
+        });
     }
 }

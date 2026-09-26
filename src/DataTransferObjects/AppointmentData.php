@@ -32,4 +32,29 @@ final readonly class AppointmentData
         public array $contacts = [],
         public ?AppointmentApprovalData $approval = null,
     ) {}
+
+    /**
+     * The same appointment at another start: one occurrence of a recurring series. Every field
+     * carries over — location, coordinates, contacts and approval included — so an occurrence
+     * is exactly what scheduling it on its own would create; only the rule itself is dropped.
+     */
+    public function forOccurrence(CarbonImmutable $startsAt): self
+    {
+        return new self(
+            name: $this->name,
+            startsAt: $startsAt,
+            durationMinutes: $this->durationMinutes,
+            timezone: $this->timezone,
+            description: $this->description,
+            meta: $this->meta,
+            status: $this->status,
+            participants: $this->participants,
+            recurrence: null,
+            preventConflicts: $this->preventConflicts,
+            location: $this->location,
+            coordinates: $this->coordinates,
+            contacts: $this->contacts,
+            approval: $this->approval,
+        );
+    }
 }
