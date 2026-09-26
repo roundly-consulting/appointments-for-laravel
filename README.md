@@ -274,6 +274,10 @@ return response($appointment->toIcs(), 200, [
 ]);
 ```
 
+Text values are escaped per RFC 5545 §3.3.11 — any line break (a textarea's CRLF, a lone CR or
+LF) becomes one `\n`, and `\`, `;` and `,` are escaped — and long lines fold at 75 octets without
+splitting a multi-byte UTF-8 character.
+
 ### Relationships
 
 ```php

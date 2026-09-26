@@ -145,7 +145,10 @@ final class IcsGenerator
             return null;
         }
 
-        return ['name' => $contact->name ?? $contact->label, 'email' => $contact->value];
+        // Contacts stores a missing name as '' (NOT NULL column), so `??` alone never reached the label.
+        $name = $contact->name !== '' ? $contact->name : $contact->label;
+
+        return ['name' => $name, 'email' => $contact->value];
     }
 
     /**
@@ -212,7 +215,8 @@ final class IcsGenerator
      */
     private function param(string $value, bool $quote = true): string
     {
-        $clean = str_replace(["\r", "\n", '"'], '', $value);
+        // A parameter value can hold neither a DQUOTE nor any control character (§3.1).
+        $clean = str_replace('"', '', $this->withoutControls($value));
 
         if ($quote && (str_contains($clean, ':') || str_contains($clean, ';') || str_contains($clean, ','))) {
             return '"'.$clean.'"';
@@ -226,13 +230,27 @@ final class IcsGenerator
         return rtrim(rtrim(number_format($value, 6, '.', ''), '0'), '.');
     }
 
+    /**
+     * Escape a TEXT value (RFC 5545 §3.3.11). Every line break — CRLF from a textarea, a lone CR
+     * or LF — becomes one escaped `\n`, so no raw CR/LF can end the content line early; any other
+     * control character TEXT cannot carry is dropped (a tab is allowed).
+     */
     private function escape(string $value): string
     {
+        $value = preg_replace('/\r\n?/', "\n", $value) ?? $value;
+        $value = preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $value) ?? $value;
+
         return str_replace(
             ['\\', "\n", ',', ';'],
             ['\\\\', '\\n', '\\,', '\\;'],
             $value,
         );
+    }
+
+    /** Strip every control character except a tab. */
+    private function withoutControls(string $value): string
+    {
+        return preg_replace('/[\x00-\x08\x0A-\x1F\x7F]/', '', $value) ?? $value;
     }
 
     /**
