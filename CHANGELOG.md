@@ -14,3 +14,5 @@ All notable changes to `appointments-for-laravel` will be documented in this fil
   escaped `\n` instead of a raw CR inside the content line; other control characters are dropped.
 - The ICS `ORGANIZER` `CN` falls back to the booking contact's label when it has no name, and CN
   values no longer carry control characters.
+- ICS export no longer emits an invalid `ATTENDEE:<class>:<id>` for a participant without an
+  email; such participants are omitted, since ATTENDEE must be a calendar address (`mailto:`).

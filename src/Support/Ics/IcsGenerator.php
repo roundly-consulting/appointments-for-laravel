@@ -152,6 +152,12 @@ final class IcsGenerator
     }
 
     /**
+     * One `ATTENDEE;CN=…:mailto:…` line per participant with a primary contact email.
+     *
+     * ATTENDEE is a CAL-ADDRESS (RFC 5545 §3.3.3) — a URI, and in practice calendar clients
+     * only act on `mailto:`. A participant with no email has no address to give, so it is left
+     * out rather than emitted as an invalid value that strict clients reject the file over.
+     *
      * @return list<string>
      */
     private function attendees(Appointment $appointment): array
@@ -160,20 +166,11 @@ final class IcsGenerator
 
         foreach ($appointment->participants as $participant) {
             $related = $participant->participant;
+            $email = $related instanceof Model ? $this->primaryEmailOf($related) : null;
 
-            if (! $related instanceof Model) {
-                continue;
-            }
-
-            $email = $this->primaryEmailOf($related);
-
-            if ($email !== null) {
+            if ($related instanceof Model && $email !== null && $email !== '') {
                 $lines[] = $this->calendarUser('ATTENDEE', $this->displayName($related), $email);
-
-                continue;
             }
-
-            $lines[] = 'ATTENDEE:'.$this->escape(sprintf('%s:%s', $related->getMorphClass(), $related->getKey()));
         }
 
         return $lines;

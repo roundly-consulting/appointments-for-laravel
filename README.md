@@ -349,8 +349,10 @@ $appointment->primaryEmail()?->value;          // "guest@example.com"
 $appointment->addEmail('other@example.com');
 ```
 
-A participant (or the appointment) that exposes a primary email upgrades its ICS line to
-`ATTENDEE;CN="…":mailto:…`; the appointment's booking contact becomes the calendar `ORGANIZER`.
+A participant that exposes a primary email is exported as `ATTENDEE;CN="…":mailto:…`, and the
+appointment's booking contact becomes the calendar `ORGANIZER`. A participant with no email is
+left out of the `.ics`: an `ATTENDEE` must be a calendar address (in practice `mailto:`), and
+Google Calendar, Apple Calendar and Outlook have nothing to act on without one.
 
 ### Booking approval workflow (approvals)
 

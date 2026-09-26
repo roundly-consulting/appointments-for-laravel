@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Appointments\Actions\AttachParticipantAction;
 use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
 use RoundlyConsulting\Appointments\Enums\Status;
@@ -138,12 +139,14 @@ it('includes a location from meta and attendee lines from participants', functio
         'duration_minutes' => 60,
         'meta' => ['location' => 'HQ'],
     ]);
-    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData(User::create()));
+    $attendee = User::create();
+    $attendee->addEmail('guest@example.com', primary: true);
+    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData($attendee));
     $appointment->load('participants');
 
     $ics = $this->generator->forAppointment($appointment);
 
-    expect($ics)->toContain('LOCATION:HQ')->toContain('ATTENDEE:');
+    expect($ics)->toContain('LOCATION:HQ')->toContain('ATTENDEE:mailto:guest@example.com');
 });
 
 it('prefers the location column and emits a GEO line', function (): void {
@@ -214,15 +217,48 @@ it('names the organizer by the contact label when the contact has no name', func
     expect(icsContentLines($appointment->toIcs()))->toContain('ORGANIZER;CN=Front desk:mailto:desk@example.com');
 });
 
-it('falls back to a type:id attendee when no contact email exists', function (): void {
+it('omits a participant without a contact email rather than emit an invalid attendee', function (): void {
+    // ATTENDEE is a CAL-ADDRESS (RFC 5545 §3.3.3): a URI, in practice mailto:. A participant with
+    // no email has no address a calendar client can use, so it is left out of the file.
+    $withEmail = User::create();
+    $withEmail->addEmail('guest@example.com', primary: true);
+
     $appointment = Appointment::factory()->create([
         'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
         'duration_minutes' => 60,
     ]);
     app(AttachParticipantAction::class)->execute($appointment, new ParticipantData(User::create()));
+    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData($withEmail));
     $appointment->load('participants');
 
-    expect($appointment->toIcs())->toMatch('/ATTENDEE:[^\r\n]+:\d+/');
+    $attendees = array_values(array_filter(
+        icsContentLines($appointment->toIcs()),
+        fn (string $line): bool => str_starts_with($line, 'ATTENDEE'),
+    ));
+
+    expect($attendees)->toBe(['ATTENDEE:mailto:guest@example.com']);
+});
+
+/** A participant model with no contacts at all (no `primaryEmail()`). */
+final class IcsRoom extends Model
+{
+    protected $table = 'users';
+
+    protected $guarded = [];
+
+    public $timestamps = false;
+}
+
+it('omits a participant whose model carries no contacts', function (): void {
+    $appointment = Appointment::factory()->create([
+        'starts_at' => CarbonImmutable::parse('2026-07-01 09:00', 'UTC'),
+        'duration_minutes' => 60,
+    ]);
+    app(AttachParticipantAction::class)->execute($appointment, new ParticipantData(IcsRoom::create()));
+    $appointment->load('participants');
+
+    expect($appointment->participants)->toHaveCount(1)
+        ->and($appointment->toIcs())->not->toContain('ATTENDEE');
 });
 
 it('builds a calendar from a collection of appointments', function (): void {
