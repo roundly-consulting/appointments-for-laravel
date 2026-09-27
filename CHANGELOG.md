@@ -1,18 +1,28 @@
 # Changelog
 
-All notable changes to `appointments-for-laravel` will be documented in this file.
+All notable changes to `appointments-for-laravel` are documented in this file. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### Fixed
+Initial public release.
 
-- Recurring series now give every occurrence the location, coordinates, guest contacts and
-  approval request a single scheduled appointment gets (they were silently dropped).
-- A recurring series is created atomically: a conflict on a later occurrence no longer leaves
-  the earlier ones behind.
-- ICS text escaping follows RFC 5545 §3.3.11: a CR or CRLF (e.g. from a textarea) becomes one
-  escaped `\n` instead of a raw CR inside the content line; other control characters are dropped.
-- The ICS `ORGANIZER` `CN` falls back to the booking contact's label when it has no name, and CN
-  values no longer carry control characters.
-- ICS export no longer emits an invalid `ATTENDEE:<class>:<id>` for a participant without an
-  email; such participants are omitted, since ATTENDEE must be a calendar address (`mailto:`).
+### Added
+
+- Appointments with start, duration or end time and a time zone, created through the fluent
+  `Appointments::for()` builder or `CreateAppointmentAction` with an `AppointmentData` DTO.
+- Participants of any Eloquent model with roles, via a polymorphic relation and the
+  `HasAppointments` trait.
+- Guarded status lifecycle: `confirm()`, `cancel()`, `complete()`, `decline()` and `markNoShow()`.
+- Double-booking detection with `ConflictDetector` and the opt-in `preventConflicts()` guard.
+- `Appointments::reschedule()` and recurring series (`RecurrenceData`, `createRecurring()`).
+- Query scopes `upcoming()`, `past()`, `between()`, `overlapping()`, `withStatus()` and
+  `forParticipant()`.
+- Standards-compliant calendar export: `toIcs()` for one appointment, `IcsGenerator` for many.
+- Events for appointment create, update, reschedule and status changes, and participant changes.
+- Venue location with `located()`, `distanceFrom()` and `withinRadius()`, built on
+  geolocation-for-laravel.
+- Guest contact e-mail and phone on a booking, built on contacts-for-laravel.
+- Booking approval workflows (quorum, stages or a named preset), built on approvals-for-laravel.
+- Post-visit reviews with verified attendance and rating summaries, built on reviews-for-laravel.
