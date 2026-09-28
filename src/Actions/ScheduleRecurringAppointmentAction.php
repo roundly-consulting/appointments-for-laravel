@@ -12,11 +12,11 @@ use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\RecurrenceExpander;
 
-final class ScheduleRecurringAppointmentAction
+final readonly class ScheduleRecurringAppointmentAction
 {
     public function __construct(
-        private readonly CreateAppointmentAction $createAppointment,
-        private readonly RecurrenceExpander $expander,
+        private CreateAppointmentAction $createAppointment,
+        private RecurrenceExpander $expander,
     ) {}
 
     /**

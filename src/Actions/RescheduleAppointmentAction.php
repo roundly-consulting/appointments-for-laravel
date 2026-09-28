@@ -11,10 +11,10 @@ use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
 
-final class RescheduleAppointmentAction
+final readonly class RescheduleAppointmentAction
 {
     public function __construct(
-        private readonly ConflictDetector $conflicts,
+        private ConflictDetector $conflicts,
     ) {}
 
     public function execute(
@@ -53,7 +53,9 @@ final class RescheduleAppointmentAction
             return;
         }
 
-        foreach ($appointment->participants as $participant) {
+        // Queried, not the loaded relation: a relation loaded before a participant joined would
+        // let the newcomer be double-booked.
+        foreach ($appointment->participants()->with('participant')->get() as $participant) {
             $related = $participant->participant;
 
             if ($related === null) {

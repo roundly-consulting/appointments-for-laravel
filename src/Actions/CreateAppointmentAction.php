@@ -7,19 +7,27 @@ namespace RoundlyConsulting\Appointments\Actions;
 use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentApprovalData;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
+use RoundlyConsulting\Appointments\Exceptions\DuplicateParticipantException;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
-use RoundlyConsulting\Approvals\Facades\Approvals;
+use RoundlyConsulting\Approvals\ApprovalsManager;
 
-final class CreateAppointmentAction
+final readonly class CreateAppointmentAction
 {
     public function __construct(
-        private readonly AttachParticipantAction $attachParticipant,
-        private readonly ConflictDetector $conflicts,
+        private ConflictDetector $conflicts,
+        private ApprovalsManager $approvals,
     ) {}
 
+    /**
+     * Every guard runs before the first write, so a refused booking leaves no row and fires no
+     * event.
+     *
+     * @throws DuplicateParticipantException when the same model is listed twice
+     * @throws SchedulingConflictException when conflicts are prevented and a participant is booked
+     */
     public function execute(AppointmentData $data): Appointment
     {
         // Persist instants in UTC so the stored wall-clock value is unambiguous;
@@ -27,6 +35,7 @@ final class CreateAppointmentAction
         $startsAt = $data->startsAt->utc();
         $endsAt = $this->endsAt($startsAt, $data->durationMinutes);
 
+        $this->guardAgainstDuplicates($data);
         $this->guardAgainstConflicts($data, $startsAt, $endsAt);
 
         $model = AppointmentModel::class();
@@ -45,7 +54,7 @@ final class CreateAppointmentAction
         ]);
 
         foreach ($data->participants as $participant) {
-            $this->attachParticipant->execute($appointment, $participant);
+            $appointment->participants()->create($participant->toAttributes());
         }
 
         foreach ($data->contacts as $contact) {
@@ -68,13 +77,16 @@ final class CreateAppointmentAction
         if ($approval->workflow !== null) {
             $approvers = $approval->stageApprovers !== [] ? $approval->stageApprovers : $approval->approvers;
 
-            Approvals::for($appointment)->workflow($approval->workflow)->request($approvers);
+            $this->approvals->request($appointment)->workflow($approval->workflow)->open($approvers);
 
             return;
         }
 
         if ($approval->stages !== []) {
-            $appointment->requestStagedApproval($approval->stages, $approval->rejectOnStageRejection);
+            $this->approvals->request($appointment)
+                ->stages($approval->stages)
+                ->continueOnRejection(! $approval->rejectOnStageRejection)
+                ->open();
 
             return;
         }
@@ -83,7 +95,10 @@ final class CreateAppointmentAction
             return;
         }
 
-        $appointment->requestApproval($approval->approvers, $approval->rule, $approval->quorum);
+        $this->approvals->request($appointment)
+            ->from($approval->approvers)
+            ->rule($approval->rule, $approval->quorum)
+            ->open();
     }
 
     private function endsAt(CarbonImmutable $startsAt, ?int $durationMinutes): CarbonImmutable
@@ -91,6 +106,17 @@ final class CreateAppointmentAction
         $minutes = $durationMinutes ?? (int) config('appointments.default_duration_minutes', 60);
 
         return $startsAt->addMinutes($minutes);
+    }
+
+    private function guardAgainstDuplicates(AppointmentData $data): void
+    {
+        foreach ($data->participants as $index => $participant) {
+            foreach (array_slice($data->participants, $index + 1) as $other) {
+                if ($participant->isSameParticipantAs($other)) {
+                    throw DuplicateParticipantException::make($participant->participant);
+                }
+            }
+        }
     }
 
     private function guardAgainstConflicts(AppointmentData $data, CarbonImmutable $startsAt, CarbonImmutable $endsAt): void

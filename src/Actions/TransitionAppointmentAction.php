@@ -10,7 +10,7 @@ use RoundlyConsulting\Appointments\Events\AppointmentStatusChanged;
 use RoundlyConsulting\Appointments\Exceptions\InvalidStatusTransitionException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 
-final class TransitionAppointmentAction
+final readonly class TransitionAppointmentAction
 {
     public function execute(Appointment $appointment, Status $to): Appointment
     {

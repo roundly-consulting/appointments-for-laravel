@@ -4,22 +4,92 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Appointments\Actions;
 
+use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
+use RoundlyConsulting\Appointments\Exceptions\DuplicateParticipantException;
+use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Support\ConflictDetector;
 
-final class AttachParticipantAction
+/**
+ * Add a participant to an existing appointment. A participant removed earlier is restored
+ * (ParticipantUpdated); a new one is inserted (ParticipantCreated).
+ */
+final readonly class AttachParticipantAction
 {
-    public function execute(Appointment $appointment, ParticipantData $data): Participant
+    public function __construct(
+        private ConflictDetector $conflicts,
+    ) {}
+
+    /**
+     * @throws DuplicateParticipantException when the model already takes part
+     * @throws SchedulingConflictException when conflicts are prevented (argument or
+     *                                     `appointments.prevent_conflicts`) and the model is
+     *                                     booked elsewhere in the appointment's window
+     */
+    public function execute(Appointment $appointment, ParticipantData $data, bool $preventConflicts = false): Participant
     {
-        /** @var Participant $participant */
-        $participant = $appointment->participants()->create([
-            'participant_type' => $data->participant->getMorphClass(),
-            'participant_id' => $data->participant->getKey(),
-            'role' => $data->role,
-            'meta' => $data->meta,
-        ]);
+        // Trashed rows included: the (appointment, participant) pair is unique in the table, so a
+        // participant removed earlier comes back by restoring its row, not by a second insert.
+        /** @var Participant|null $existing */
+        $existing = $appointment->participants()->withTrashed()
+            ->whereMorphedTo('participant', $data->participant)
+            ->first();
+
+        if ($existing !== null && ! $existing->trashed()) {
+            throw DuplicateParticipantException::make($data->participant, $appointment);
+        }
+
+        $this->guardAgainstConflicts($appointment, $data, $preventConflicts);
+
+        $participant = $existing !== null
+            ? $this->restore($existing, $data)
+            : $this->insert($appointment, $data);
+
+        // A loaded relation would now be stale (the ICS export reads it).
+        if ($appointment->relationLoaded('participants')) {
+            $appointment->load('participants');
+        }
 
         return $participant;
+    }
+
+    private function insert(Appointment $appointment, ParticipantData $data): Participant
+    {
+        /** @var Participant $participant */
+        $participant = $appointment->participants()->create($data->toAttributes());
+
+        return $participant;
+    }
+
+    /**
+     * Bring a removed participant back with the new role and meta (fires ParticipantUpdated).
+     */
+    private function restore(Participant $participant, ParticipantData $data): Participant
+    {
+        $participant->forceFill(['role' => $data->role, 'meta' => $data->meta])->restore();
+
+        return $participant;
+    }
+
+    private function guardAgainstConflicts(Appointment $appointment, ParticipantData $data, bool $preventConflicts): void
+    {
+        $prevent = $preventConflicts || (bool) config('appointments.prevent_conflicts', false);
+
+        if (! $prevent) {
+            return;
+        }
+
+        $startsAt = CarbonImmutable::instance($appointment->starts_at);
+        $endsAt = $appointment->ends_at !== null
+            ? CarbonImmutable::instance($appointment->ends_at)
+            : $startsAt->addMinutes($appointment->durationInMinutes());
+
+        $conflicts = $this->conflicts->forParticipant($data->participant, $startsAt, $endsAt, ignore: $appointment);
+
+        if ($conflicts->isNotEmpty()) {
+            throw SchedulingConflictException::make($conflicts);
+        }
     }
 }

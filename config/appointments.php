@@ -85,9 +85,9 @@ return [
     | Prevent conflicts
     |--------------------------------------------------------------------------
     |
-    | When true, creating or rescheduling an appointment throws a
-    | SchedulingConflictException if a participant is already booked in an
-    | overlapping slot. Opt-in; can also be enabled per call on the builder.
+    | When true, creating or rescheduling an appointment, or adding a participant
+    | to one, throws a SchedulingConflictException if a participant is already
+    | booked in an overlapping slot. Opt-in; can also be enabled per call.
     |
     */
     'prevent_conflicts' => false,
