@@ -14,7 +14,7 @@ use RoundlyConsulting\Approvals\Facades\Approvals;
 it('confirms a pending appointment when its approval is approved', function (): void {
     $organiser = User::create();
 
-    $appointment = Appointments::for('Booking request')
+    $appointment = Appointments::schedule('Booking request')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom($organiser)
         ->create();
@@ -36,7 +36,7 @@ it('confirms a pending appointment when its approval is approved', function (): 
 it('declines a pending appointment when its approval is rejected', function (): void {
     $organiser = User::create();
 
-    $appointment = Appointments::for('Booking request')
+    $appointment = Appointments::schedule('Booking request')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom($organiser)
         ->create();
@@ -50,7 +50,7 @@ it('confirms once a quorum is reached', function (): void {
     $a = User::create();
     $b = User::create();
 
-    $appointment = Appointments::for('Quorum booking')
+    $appointment = Appointments::schedule('Quorum booking')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom([$a, $b], ApprovalRule::Quorum, quorum: 1)
         ->create();
@@ -64,7 +64,7 @@ it('stays pending until a unanimous approval completes', function (): void {
     $a = User::create();
     $b = User::create();
 
-    $appointment = Appointments::for('Unanimous booking')
+    $appointment = Appointments::schedule('Unanimous booking')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom([$a, $b])
         ->create();
@@ -81,7 +81,7 @@ it('stays pending until a unanimous approval completes', function (): void {
 it('is a no-op on a double resolution', function (): void {
     $organiser = User::create();
 
-    $appointment = Appointments::for('Booking request')
+    $appointment = Appointments::schedule('Booking request')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom($organiser)
         ->create();
@@ -97,7 +97,7 @@ it('honours the transition guard when enforcing', function (): void {
 
     $organiser = User::create();
 
-    $appointment = Appointments::for('Booking request')
+    $appointment = Appointments::schedule('Booking request')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom($organiser)
         ->create();
@@ -111,7 +111,7 @@ it('honours the transition guard when enforcing', function (): void {
 });
 
 it('leaves an appointment created without approval untouched', function (): void {
-    $appointment = Appointments::for('Plain booking')
+    $appointment = Appointments::schedule('Plain booking')
         ->startingAt('2026-07-01 09:00')
         ->create();
 
@@ -130,7 +130,7 @@ it('opens a flat request from a named workflow preset', function (): void {
     $b = User::create();
     $c = User::create();
 
-    $appointment = Appointments::for('Preset booking')
+    $appointment = Appointments::schedule('Preset booking')
         ->startingAt('2026-07-01 09:00')
         ->approvalWorkflow('booking')
         ->requireApprovalFrom([$a, $b, $c])
@@ -154,7 +154,7 @@ it('opens a staged request from a named workflow preset', function (): void {
     $reception = User::create();
     $clinician = User::create();
 
-    $appointment = Appointments::for('Clinic preset')
+    $appointment = Appointments::schedule('Clinic preset')
         ->startingAt('2026-07-01 09:00')
         ->approvalWorkflow('clinic')
         ->approvalStageApprovers([[$reception], [$clinician]])
@@ -172,7 +172,7 @@ it('rejects a staged booking when a stage is rejected', function (): void {
     $reception = User::create();
     $clinician = User::create();
 
-    $appointment = Appointments::for('Staged rejection')
+    $appointment = Appointments::schedule('Staged rejection')
         ->startingAt('2026-07-01 09:00')
         ->approvalStages([
             new StageDefinition([$reception]),
@@ -190,7 +190,7 @@ it('opens a staged pipeline and confirms once every stage clears', function (): 
     $reception = User::create();
     $clinician = User::create();
 
-    $appointment = Appointments::for('Staged booking')
+    $appointment = Appointments::schedule('Staged booking')
         ->startingAt('2026-07-01 09:00')
         ->approvalStages([
             new StageDefinition([$reception]),

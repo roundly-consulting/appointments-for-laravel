@@ -8,8 +8,6 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use RoundlyConsulting\Appointments\Actions\CreateAppointmentAction;
-use RoundlyConsulting\Appointments\Actions\ScheduleRecurringAppointmentAction;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentApprovalData;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
 use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
@@ -23,6 +21,11 @@ use RoundlyConsulting\Contacts\DataTransferObjects\ContactData;
 use RoundlyConsulting\Contacts\Enums\ContactType;
 use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
 
+/**
+ * `Appointments::schedule($name)` — a fluent appointment. `create()` and `createRecurring()`
+ * hand the finished AppointmentData to the manager, so host overrides and `Appointments::fake()`
+ * see them.
+ */
 final class AppointmentBuilder
 {
     private ?CarbonImmutable $startsAt = null;
@@ -69,10 +72,12 @@ final class AppointmentBuilder
 
     private bool $rejectOnStageRejection = true;
 
+    /**
+     * @internal build it with `Appointments::schedule($name)`
+     */
     public function __construct(
+        private readonly AppointmentManager $appointments,
         private readonly string $name,
-        private readonly CreateAppointmentAction $createAppointment,
-        private readonly ScheduleRecurringAppointmentAction $scheduleRecurring,
     ) {}
 
     public function startingAt(CarbonInterface|string $at, ?string $timezone = null): self
@@ -293,19 +298,18 @@ final class AppointmentBuilder
 
     public function create(): Appointment
     {
-        return $this->createAppointment->execute($this->toData());
+        return $this->appointments->create($this->toData());
     }
 
     /**
+     * One appointment per occurrence of the `recurring()` rule, all-or-nothing; without a rule,
+     * the single appointment.
+     *
      * @return Collection<int, Appointment>
      */
     public function createRecurring(): Collection
     {
-        if ($this->recurrence === null) {
-            return new Collection([$this->create()]);
-        }
-
-        return $this->scheduleRecurring->execute($this->toData(), $this->recurrence);
+        return $this->appointments->createRecurring($this->toData());
     }
 
     private function toData(): AppointmentData

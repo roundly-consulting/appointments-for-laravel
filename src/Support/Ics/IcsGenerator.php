@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Appointments\Enums\Status;
 use RoundlyConsulting\Appointments\Models\Appointment;
 
+/**
+ * @internal reach it through `Appointments::ics()`, `Appointments::for($appointment)->ics()` or
+ *           `$appointment->toIcs()`
+ */
 final class IcsGenerator
 {
     private const CRLF = "\r\n";

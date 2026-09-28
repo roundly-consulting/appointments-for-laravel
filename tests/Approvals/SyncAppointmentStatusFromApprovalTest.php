@@ -26,7 +26,7 @@ function appointmentApprovalRequest(Appointment $appointment, ApprovalStatus $st
 
 function pendingAppointment(): Appointment
 {
-    return Appointments::for('Booking')->startingAt('2026-07-01 09:00')->create();
+    return Appointments::schedule('Booking')->startingAt('2026-07-01 09:00')->create();
 }
 
 it('cancels the appointment when its approval expires', function (): void {

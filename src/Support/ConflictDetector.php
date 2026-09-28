@@ -10,6 +10,9 @@ use Illuminate\Support\Collection;
 use RoundlyConsulting\Appointments\Enums\Status;
 use RoundlyConsulting\Appointments\Models\Appointment;
 
+/**
+ * @internal reach it through `Appointments::conflicts()` / `Appointments::isAvailable()`
+ */
 final class ConflictDetector
 {
     /**

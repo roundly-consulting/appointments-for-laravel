@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\Appointments\AppointmentManager;
 use RoundlyConsulting\Appointments\Events\AppointmentEvent;
 use RoundlyConsulting\Appointments\Events\ParticipantEvent;
 use RoundlyConsulting\Appointments\Exceptions\AppointmentsException;
@@ -21,6 +22,8 @@ ArchPresets::strictTypes('RoundlyConsulting\Appointments');
  *
  *  - Appointment / Participant, the two models `config/appointments.php` invites a host to
  *    swap — pinned instead by the preset below, the deliberate tension the two presets hold;
+ *  - AppointmentManager, the facade root, which AppointmentsFake extends so a constructor-injected
+ *    manager receives the fake under `Appointments::fake()`;
  *  - AppointmentsException, the exception base hosts catch;
  *  - AppointmentEvent / ParticipantEvent, the abstract event bases the concrete
  *    created/updated/deleted events extend (and the concrete events themselves, which are
@@ -29,6 +32,7 @@ ArchPresets::strictTypes('RoundlyConsulting\Appointments');
 ArchPresets::finalByDefault('RoundlyConsulting\Appointments', [
     Appointment::class,
     Participant::class,
+    AppointmentManager::class,
     AppointmentsException::class,
     AppointmentEvent::class,
     ParticipantEvent::class,
@@ -95,3 +99,10 @@ ArchPresets::morphColumnsUseTheSeam(__DIR__.'/../database/migrations');
 ArchPresets::runtimeRequireIsWhitelisted(__DIR__.'/../composer.json');
 
 ArchPresets::noDebuggingLeftovers();
+
+/**
+ * One path: the Appointment model's lifecycle and ICS shortcuts and the HasAppointments trait
+ * reach behaviour through AppointmentManager, never an action, so `Appointments::fake()` sees
+ * every call.
+ */
+ArchPresets::modelsGoThroughTheFacade('RoundlyConsulting\Appointments');

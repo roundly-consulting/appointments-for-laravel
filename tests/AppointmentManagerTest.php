@@ -24,7 +24,7 @@ it('reschedules through the facade', function (): void {
         'duration_minutes' => 60,
     ]);
 
-    Appointments::reschedule($appointment, CarbonImmutable::parse('2026-07-02 10:00'));
+    Appointments::for($appointment)->reschedule(CarbonImmutable::parse('2026-07-02 10:00'));
 
     expect($appointment->fresh()->starts_at->format('Y-m-d H:i'))->toBe('2026-07-02 10:00');
 });
@@ -32,7 +32,7 @@ it('reschedules through the facade', function (): void {
 it('transitions through the facade', function (): void {
     $appointment = Appointment::factory()->withStatus(Status::Pending)->create();
 
-    Appointments::transition($appointment, Status::Confirmed);
+    Appointments::for($appointment)->transition(Status::Confirmed);
 
     expect($appointment->fresh()->status)->toBe(Status::Confirmed);
 });

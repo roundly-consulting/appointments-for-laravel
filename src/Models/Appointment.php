@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use RoundlyConsulting\Appointments\Actions\TransitionAppointmentAction;
+use RoundlyConsulting\Appointments\AppointmentManager;
 use RoundlyConsulting\Appointments\Database\Factories\AppointmentFactory;
 use RoundlyConsulting\Appointments\Enums\Status;
 use RoundlyConsulting\Appointments\Events\AppointmentCreated;
@@ -21,7 +21,6 @@ use RoundlyConsulting\Appointments\Events\AppointmentUpdated;
 use RoundlyConsulting\Appointments\Exceptions\CannotReviewAppointmentException;
 use RoundlyConsulting\Appointments\Models\Concerns\HasAppointmentScopes;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
-use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
 use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Approvals\Traits\RequiresApproval;
 use RoundlyConsulting\Contacts\Concerns\HasContacts;
@@ -145,6 +144,11 @@ class Appointment extends Model
         return CarbonImmutable::instance($this->ends_at)->setTimezone($this->resolveTimezone());
     }
 
+    /*
+     * Lifecycle and export shortcuts. Each goes through the manager — never an action — so a
+     * host override and `Appointments::fake()` see the call.
+     */
+
     public function confirm(): self
     {
         return $this->transitionTo(Status::Confirmed);
@@ -172,12 +176,14 @@ class Appointment extends Model
 
     public function transitionTo(Status $status): self
     {
-        return app(TransitionAppointmentAction::class)->execute($this, $status);
+        app(AppointmentManager::class)->for($this)->transition($status);
+
+        return $this;
     }
 
     public function toIcs(): string
     {
-        return app(IcsGenerator::class)->forAppointment($this);
+        return app(AppointmentManager::class)->for($this)->ics();
     }
 
     /**

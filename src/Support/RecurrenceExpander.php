@@ -8,6 +8,9 @@ use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
 use RoundlyConsulting\Appointments\Enums\Frequency;
 
+/**
+ * @internal reach it through `Appointments::occurrences()`
+ */
 final class RecurrenceExpander
 {
     /**

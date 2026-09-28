@@ -46,7 +46,7 @@ it('materialises one appointment per occurrence in a shared group', function ():
 it('carries location, coordinates, contacts and approval onto every occurrence', function (): void {
     $organiser = User::create();
 
-    $series = Appointments::for('Physio')
+    $series = Appointments::schedule('Physio')
         ->startingAt('2026-07-06 09:00')
         ->located(51.5074, -0.1278, 'Clinic A')
         ->withContactEmail('guest@example.com')
@@ -106,13 +106,13 @@ it('builds each occurrence from every field of the single-appointment data', fun
 it('rolls back the whole series when one occurrence conflicts', function (): void {
     $user = User::create();
 
-    Appointments::for('Existing')
+    Appointments::schedule('Existing')
         ->startingAt('2026-07-13 09:00')
         ->lasting(60)
         ->withParticipant($user)
         ->create();
 
-    $schedule = fn () => Appointments::for('Weekly')
+    $schedule = fn () => Appointments::schedule('Weekly')
         ->startingAt('2026-07-06 09:00')
         ->lasting(30)
         ->withParticipant($user)

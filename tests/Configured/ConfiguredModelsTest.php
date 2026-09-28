@@ -30,7 +30,7 @@ it('honours the configured appointment model through the real booking flow', fun
         CustomAppointment::class,
         function (): array {
             // The real documented flow, not a resolver string check.
-            $appointment = Appointments::for('Project kickoff')
+            $appointment = Appointments::schedule('Project kickoff')
                 ->startingAt('2026-08-01 17:30')
                 ->lasting(90)
                 ->create();
@@ -51,7 +51,7 @@ it('honours the configured participant model when attaching an attendee', functi
     expect('appointments.participant')->toHonourModelSwap(
         CustomParticipant::class,
         function () use ($host): array {
-            $appointment = Appointments::for('Workshop')
+            $appointment = Appointments::schedule('Workshop')
                 ->startingAt('2026-08-02 10:00')
                 ->lasting(60)
                 ->withParticipant($host, ParticipantRole::Organiser)
@@ -71,7 +71,7 @@ it('resolves participants from a swapped parent through the explicit foreign key
     $host = User::create();
     $guest = User::create();
 
-    $appointment = Appointments::for('Kickoff')
+    $appointment = Appointments::schedule('Kickoff')
         ->startingAt('2026-08-03 09:00')
         ->lasting(60)
         ->withParticipant($host, ParticipantRole::Organiser)

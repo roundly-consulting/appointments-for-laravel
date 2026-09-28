@@ -7,7 +7,7 @@ use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
 
 it('round-trips coordinates through the cast', function (): void {
-    $appointment = Appointments::for('Clinic visit')
+    $appointment = Appointments::schedule('Clinic visit')
         ->startingAt('2026-07-01 09:00')
         ->located(51.5074, -0.1278, 'Clinic A')
         ->create();
@@ -22,7 +22,7 @@ it('round-trips coordinates through the cast', function (): void {
 });
 
 it('accepts a Coordinates value object via at()', function (): void {
-    $appointment = Appointments::for('Remote')
+    $appointment = Appointments::schedule('Remote')
         ->startingAt('2026-07-01 09:00')
         ->at(new Coordinates(40.7128, -74.0060))
         ->create();
@@ -31,8 +31,8 @@ it('accepts a Coordinates value object via at()', function (): void {
 });
 
 it('filters appointments within a radius', function (): void {
-    Appointments::for('London')->startingAt('2026-07-01 09:00')->located(51.5074, -0.1278)->create();
-    Appointments::for('Paris')->startingAt('2026-07-01 09:00')->located(48.8566, 2.3522)->create();
+    Appointments::schedule('London')->startingAt('2026-07-01 09:00')->located(51.5074, -0.1278)->create();
+    Appointments::schedule('Paris')->startingAt('2026-07-01 09:00')->located(48.8566, 2.3522)->create();
 
     $near = Appointment::query()
         ->withinRadius(new Coordinates(51.5074, -0.1278), 50)
@@ -42,7 +42,7 @@ it('filters appointments within a radius', function (): void {
 });
 
 it('measures distance from a point in kilometres', function (): void {
-    $appointment = Appointments::for('London')->startingAt('2026-07-01 09:00')->located(51.5074, -0.1278)->create();
+    $appointment = Appointments::schedule('London')->startingAt('2026-07-01 09:00')->located(51.5074, -0.1278)->create();
 
     $distance = $appointment->distanceFrom(new Coordinates(48.8566, 2.3522));
 
@@ -50,7 +50,7 @@ it('measures distance from a point in kilometres', function (): void {
 });
 
 it('returns null distance when the appointment has no coordinates', function (): void {
-    $appointment = Appointments::for('Undisclosed')->startingAt('2026-07-01 09:00')->create();
+    $appointment = Appointments::schedule('Undisclosed')->startingAt('2026-07-01 09:00')->create();
 
     expect($appointment->distanceFrom(new Coordinates(0.0, 0.0)))->toBeNull()
         ->and($appointment->coordinates)->toBeNull();

@@ -12,13 +12,13 @@ use RoundlyConsulting\Approvals\Models\Approval;
 it('lapses expired appointment-approval decisions', function (): void {
     $organiser = User::create();
 
-    $appointment = Appointments::for('Expiring booking')
+    $appointment = Appointments::schedule('Expiring booking')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom($organiser)
         ->create();
 
     // A pending decision that expired an hour ago.
-    Approvals::for($appointment)->as($organiser)->expiringAt(CarbonImmutable::now()->subHour())->request();
+    Approvals::for($appointment)->as($organiser)->expiringAt(CarbonImmutable::now()->subHour())->ask();
 
     $this->artisan('appointments:expire-approvals')
         ->expectsOutputToContain('Lapsed 1 expired approval decision(s).')

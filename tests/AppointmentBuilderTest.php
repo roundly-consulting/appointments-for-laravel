@@ -16,7 +16,7 @@ it('builds an appointment fluently', function (): void {
     $host = User::create();
     $guest = User::create();
 
-    $appointment = Appointments::for('Project kickoff')
+    $appointment = Appointments::schedule('Project kickoff')
         ->startingAt('2026-07-01 17:30', timezone: 'Europe/Bratislava')
         ->lasting(90)
         ->describedAs('Wings')
@@ -39,7 +39,7 @@ it('builds an appointment fluently', function (): void {
 });
 
 it('derives the duration from an until time', function (): void {
-    $appointment = Appointments::for('Workshop')
+    $appointment = Appointments::schedule('Workshop')
         ->startingAt('2026-07-01 09:00')
         ->until('2026-07-01 11:30')
         ->create();
@@ -48,7 +48,7 @@ it('derives the duration from an until time', function (): void {
 });
 
 it('defaults the start to now when none is given', function (): void {
-    $appointment = Appointments::for('Ad hoc')->create();
+    $appointment = Appointments::schedule('Ad hoc')->create();
 
     expect($appointment->starts_at)->not->toBeNull();
 });
@@ -56,13 +56,13 @@ it('defaults the start to now when none is given', function (): void {
 it('opts into conflict prevention per call', function (): void {
     $user = User::create();
 
-    Appointments::for('First')
+    Appointments::schedule('First')
         ->startingAt('2026-07-01 09:00')
         ->lasting(60)
         ->withParticipant($user)
         ->create();
 
-    Appointments::for('Clash')
+    Appointments::schedule('Clash')
         ->startingAt('2026-07-01 09:30')
         ->lasting(60)
         ->withParticipant($user)
@@ -71,7 +71,7 @@ it('opts into conflict prevention per call', function (): void {
 })->throws(SchedulingConflictException::class);
 
 it('creates a single appointment from createRecurring without a rule', function (): void {
-    $appointments = Appointments::for('One off')
+    $appointments = Appointments::schedule('One off')
         ->startingAt('2026-07-01 09:00')
         ->createRecurring();
 
@@ -79,7 +79,7 @@ it('creates a single appointment from createRecurring without a rule', function 
 });
 
 it('creates recurring appointments when a rule is set', function (): void {
-    $appointments = Appointments::for('Weekly standup')
+    $appointments = Appointments::schedule('Weekly standup')
         ->startingAt('2026-07-06 09:00')
         ->lasting(30)
         ->recurring(new RecurrenceData(Frequency::Weekly, count: 3))
@@ -90,7 +90,7 @@ it('creates recurring appointments when a rule is set', function (): void {
 });
 
 it('sets the venue string on its own', function (): void {
-    $appointment = Appointments::for('Venue only')
+    $appointment = Appointments::schedule('Venue only')
         ->startingAt('2026-07-01 09:00')
         ->venue('Meeting Room 3')
         ->create();
@@ -103,7 +103,7 @@ it('opens a flat approval built from standalone rule and quorum setters', functi
     $a = User::create();
     $b = User::create();
 
-    $appointment = Appointments::for('Config booking')
+    $appointment = Appointments::schedule('Config booking')
         ->startingAt('2026-07-01 09:00')
         ->requireApprovalFrom([$a, $b])
         ->approvalRule(ApprovalRule::Quorum)

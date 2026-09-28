@@ -12,7 +12,7 @@ use RoundlyConsulting\Appointments\Tests\Models\User;
 
 function completedAppointmentWith(User $attendee): Appointment
 {
-    $appointment = Appointments::for('Consultation')
+    $appointment = Appointments::schedule('Consultation')
         ->startingAt('2026-07-01 09:00')
         ->withParticipant($attendee)
         ->create();
@@ -45,7 +45,7 @@ it('leaves a review by a non-participant unverified', function (): void {
 
 it('leaves a review on a non-completed appointment unverified', function (): void {
     $attendee = User::create();
-    $appointment = Appointments::for('Upcoming')
+    $appointment = Appointments::schedule('Upcoming')
         ->startingAt('2026-07-01 09:00')
         ->withParticipant($attendee)
         ->create();

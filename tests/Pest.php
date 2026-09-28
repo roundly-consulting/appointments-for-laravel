@@ -25,6 +25,7 @@ uses(TestCase::class)->in(
     'DataTransferObjects',
     'Enums',
     'Exceptions',
+    'Feature',
     'Geolocation',
     'Migrations',
     'Provider',

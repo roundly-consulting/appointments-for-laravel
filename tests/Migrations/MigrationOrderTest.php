@@ -97,7 +97,7 @@ it('runs on the driver the environment declares', function (): void {
  * would let the int 2 come back as the string "2".
  */
 it('round-trips the appointment columns on the configured engine', function (): void {
-    $appointment = Appointments::for('Kickoff')
+    $appointment = Appointments::schedule('Kickoff')
         ->startingAt('2026-08-01 17:30')
         ->lasting(90)
         ->withMeta(['region' => 'eu', 'tier' => 2])

@@ -6,7 +6,7 @@ use RoundlyConsulting\Appointments\Facades\Appointments;
 use RoundlyConsulting\Contacts\Enums\ContactType;
 
 it('attaches guest contacts through the builder', function (): void {
-    $appointment = Appointments::for('Guest booking')
+    $appointment = Appointments::schedule('Guest booking')
         ->startingAt('2026-07-01 09:00')
         ->withContactEmail('guest@example.com')
         ->withContactPhone('+441234567890')
@@ -18,7 +18,7 @@ it('attaches guest contacts through the builder', function (): void {
 });
 
 it('adds a contact directly on the appointment', function (): void {
-    $appointment = Appointments::for('Walk-in')->startingAt('2026-07-01 09:00')->create();
+    $appointment = Appointments::schedule('Walk-in')->startingAt('2026-07-01 09:00')->create();
 
     $appointment->addEmail('walkin@example.com', primary: true);
 
