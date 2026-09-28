@@ -97,7 +97,7 @@ return [
 | `table_names.participants` | `string` | `appointment_participants` | Table name for participants. |
 | `timezone` | `?string` | `null` | Default timezone stored on an appointment. `null` falls back to `config('app.timezone')`. |
 | `default_duration_minutes` | `int` | `60` | Duration applied when none is supplied, used to derive `ends_at` from `starts_at`. |
-| `prevent_conflicts` | `bool` | `false` | When `true`, creating or rescheduling throws on an overlapping booking for a participant. Can also be enabled per call. |
+| `prevent_conflicts` | `bool` | `false` | When `true`, creating, rescheduling or adding a participant throws on an overlapping booking for a participant. Can also be enabled per call. |
 | `recurrence.max_occurrences` | `int` | `365` | Hard cap on the number of occurrences a recurring series may expand to. |
 | `reviews.verified_attendance_resolver` | `class-string` | `DatabaseVerifiedAttendanceResolver` | Resolver that decides whether a review is verified (default: author is a participant of a Completed appointment). |
 | `reviews.require_verified_attendance` | `bool` | `false` | When `true`, `review()` throws for an unverified author instead of storing an unverified review. |
@@ -111,15 +111,17 @@ php artisan about --only=appointments
 
 ## Usage
 
-### Creating an appointment (fluent builder)
+Everything goes through the `Appointments` facade. The same API is available by injecting
+`AppointmentManager` (see [Without the facade](#without-the-facade)), and every write is also a
+plain action class.
 
-The `Appointments` facade exposes a fluent builder — the recommended API:
+### Scheduling an appointment
 
 ```php
 use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 use RoundlyConsulting\Appointments\Facades\Appointments;
 
-$appointment = Appointments::for('Project kickoff')
+$appointment = Appointments::schedule('Project kickoff')
     ->startingAt('2026-07-01 17:30', timezone: 'Europe/Bratislava')
     ->lasting(90)                       // minutes; or ->until('2026-07-01 19:00')
     ->describedAs('The best chicken wings ever!')
@@ -130,18 +132,14 @@ $appointment = Appointments::for('Project kickoff')
     ->create();
 ```
 
-### Creating an appointment (typed DTO + action)
-
-For programmatic callers, build an `AppointmentData` and run the action:
+Or hand over a typed DTO:
 
 ```php
 use Carbon\CarbonImmutable;
-use RoundlyConsulting\Appointments\Actions\CreateAppointmentAction;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
 use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
-use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 
-$appointment = app(CreateAppointmentAction::class)->execute(new AppointmentData(
+$appointment = Appointments::create(new AppointmentData(
     name: 'Project kickoff',
     startsAt: CarbonImmutable::parse('2026-07-01 17:30'),
     durationMinutes: 90,
@@ -151,6 +149,9 @@ $appointment = app(CreateAppointmentAction::class)->execute(new AppointmentData(
     ],
 ));
 ```
+
+Every guard runs before the first write, so a refused booking leaves no row and fires no event.
+Listing the same model twice throws `DuplicateParticipantException`.
 
 Instants are stored in UTC; the appointment's `timezone` drives local display:
 
@@ -167,19 +168,43 @@ Provide a duration (`lasting()` / `durationMinutes`) or an explicit end (`until(
 `ends_at`). When only one is given the other is derived; when neither is given the
 `default_duration_minutes` config value is used.
 
+### Working with one appointment
+
+`Appointments::for($appointment)` scopes every operation to one booking:
+
+```php
+use Carbon\CarbonImmutable;
+use RoundlyConsulting\Appointments\Enums\Status;
+
+$booking = Appointments::for($appointment);
+
+$booking->reschedule(CarbonImmutable::parse('2026-07-02 10:00'));            // keeps the duration
+$booking->reschedule($newStart, durationMinutes: 30, preventConflicts: true); // fires AppointmentRescheduled
+
+$booking->confirm();                  // or cancel(), complete(), decline(), markNoShow()
+$booking->transition(Status::Confirmed);
+
+$booking->participants()->add($user, ParticipantRole::Attendee, meta: ['seat' => 4]);
+$booking->ics();                      // this appointment as a one-event calendar
+```
+
 ### Status lifecycle
 
 Status is a guarded state machine. Illegal transitions throw
 `InvalidStatusTransitionException`; legal ones persist and fire `AppointmentStatusChanged`.
+The model carries the same shortcuts, and they go through the facade's manager too (so
+`Appointments::fake()` records them):
 
 ```php
 use RoundlyConsulting\Appointments\Enums\Status;
 
-$appointment->confirm();    // pending → confirmed
+Appointments::for($appointment)->confirm();   // pending → confirmed
+$appointment->confirm();                       // the same, from the model
 $appointment->cancel();     // pending/confirmed → cancelled
 $appointment->complete();   // confirmed → completed
 $appointment->decline();    // pending → declined
 $appointment->markNoShow(); // confirmed → no_show
+$appointment->transitionTo(Status::Confirmed);
 
 $appointment->status->label();  // "Confirmed" (from the enums Helpers trait)
 $appointment->status->color();  // a colour token for UI badges
@@ -195,49 +220,70 @@ Allowed transitions:
 | `confirmed` | `completed`, `cancelled`, `no_show` |
 | `cancelled`, `completed`, `declined`, `no_show` | _(final)_ |
 
-### Conflict detection
+### Participants
 
-With `prevent_conflicts` enabled (globally or per call), creating or rescheduling an
-appointment that overlaps an existing booking for any participant throws
-`SchedulingConflictException`, which carries the conflicting appointments. Touching ranges
-(one ends exactly when the next begins) do not conflict; cancelled and declined appointments
-are ignored.
+Any Eloquent model can take part — a user, a contact, a room:
 
 ```php
-use RoundlyConsulting\Appointments\Support\ConflictDetector;
+$participants = Appointments::for($appointment)->participants();
 
-$conflicts = app(ConflictDetector::class)->forParticipant($user, $start, $end);
+$row = $participants->add($user, ParticipantRole::Attendee, meta: ['seat' => 4]);
+$participants->add($room, preventConflicts: true);   // refuse if the room is booked then
+
+$participants->has($user);    // true
+$participants->all();         // the participant rows (role, meta), models eager-loaded
+$participants->remove($user); // by model…
+$participants->remove($row);  // …or by one of this appointment's participant rows
 ```
 
-### Rescheduling
+- Adding a model that already takes part throws `DuplicateParticipantException`.
+- With `preventConflicts: true` (or `prevent_conflicts` in config), adding a model that is booked
+  elsewhere in the appointment's window throws `SchedulingConflictException`.
+- Removing a model that does not take part — or a participant row that belongs to **another**
+  appointment — throws `ParticipantNotFoundException`. Nothing is deleted.
+- Removal soft-deletes the row (`ParticipantDeleted`). Adding the same model again restores that
+  row with the new role and meta (`ParticipantUpdated`); a first-time add fires
+  `ParticipantCreated`.
+
+### Availability and conflicts
 
 ```php
-use Carbon\CarbonImmutable;
-use RoundlyConsulting\Appointments\Facades\Appointments;
-
-Appointments::reschedule($appointment, CarbonImmutable::parse('2026-07-02 10:00'), durationMinutes: 60);
-// fires AppointmentRescheduled
+Appointments::isAvailable($user, $start, $end);              // bool
+Appointments::conflicts($user, $start, $end);                // Collection<Appointment>
+Appointments::conflicts($user, $start, $end, ignore: $appt); // leave one booking out
 ```
+
+With `prevent_conflicts` enabled (globally or per call), creating, rescheduling or adding a
+participant that overlaps an existing booking throws `SchedulingConflictException`, which carries
+the conflicting appointments. Touching ranges (one ends exactly when the next begins) do not
+conflict; cancelled and declined appointments are ignored.
 
 ### Recurring appointments
 
 ```php
 use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
 use RoundlyConsulting\Appointments\Enums\Frequency;
-use RoundlyConsulting\Appointments\Facades\Appointments;
 
-$series = Appointments::for('Weekly standup')
+$series = Appointments::schedule('Weekly standup')
     ->startingAt('2026-07-06 09:00')
     ->lasting(30)
     ->recurring(new RecurrenceData(Frequency::Weekly, count: 8, byWeekday: [1])) // Mondays
     ->createRecurring();
+
+$series = Appointments::createRecurring($appointmentData, new RecurrenceData(Frequency::Daily, count: 5));
+
+// Preview the start times a rule produces, without writing anything:
+Appointments::occurrences(CarbonImmutable::parse('2026-07-06 09:00'), $rule); // list<CarbonImmutable>
 ```
 
 Each occurrence is materialised as its own appointment, linked by a shared `recurrence_group`
 UUID, and carries everything a single `create()` would — location, coordinates, guest contacts
 and its own approval request. The series is all-or-nothing: if any occurrence fails (e.g. a
-`SchedulingConflictException` under `preventConflicts()`), none of it is kept. Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval`, a `count` or
-`until` bound, and `byWeekday` filtering. Expansion is capped by `recurrence.max_occurrences`.
+`SchedulingConflictException` under `preventConflicts()`), none of it is kept.
+`createRecurring()` falls back to the DTO's own `recurrence`; with no rule at all it creates the
+single appointment. Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval`, a
+`count` or `until` bound, and `byWeekday` filtering. Expansion is capped by
+`recurrence.max_occurrences`.
 
 ### Querying
 
@@ -270,24 +316,77 @@ $user->appointmentParticipations;            // the participant rows
 
 ### Calendar (ICS) export
 
-Generate RFC 5545 calendar text for one appointment or a collection — the package stays
+Generate RFC 5545 calendar text for one appointment or a whole feed — the package stays
 HTTP-free, so you decide how to deliver it:
 
 ```php
-use RoundlyConsulting\Appointments\Support\Ics\IcsGenerator;
+$ics = Appointments::for($appointment)->ics();                 // or $appointment->toIcs()
+$feed = Appointments::ics($user->appointments()->upcoming()->get()); // one VCALENDAR, many VEVENTs
 
-$ics = $appointment->toIcs();
-$ics = app(IcsGenerator::class)->forCollection($user->appointments()->get());
-
-return response($appointment->toIcs(), 200, [
+return response($feed, 200, [
     'Content-Type' => 'text/calendar; charset=utf-8',
-    'Content-Disposition' => 'attachment; filename="appointment.ics"',
+    'Content-Disposition' => 'attachment; filename="appointments.ics"',
 ]);
 ```
 
 Text values are escaped per RFC 5545 §3.3.11 — any line break (a textarea's CRLF, a lone CR or
 LF) becomes one `\n`, and `\`, `;` and `,` are escaped — and long lines fold at 75 octets without
 splitting a multi-byte UTF-8 character.
+
+### Without the facade
+
+The facade is sugar over `AppointmentManager`. Inject it for the identical API:
+
+```php
+use RoundlyConsulting\Appointments\AppointmentManager;
+
+final class BookingController
+{
+    public function __construct(private AppointmentManager $appointments) {}
+
+    public function store(): void
+    {
+        $appointment = $this->appointments->schedule('Consultation')->startingAt(now()->addDay())->create();
+        $this->appointments->for($appointment)->participants()->add(auth()->user());
+    }
+}
+```
+
+Or run an action directly (queued jobs, your own actions):
+
+```php
+use RoundlyConsulting\Appointments\Actions\AttachParticipantAction;
+use RoundlyConsulting\Appointments\Actions\CreateAppointmentAction;
+use RoundlyConsulting\Appointments\Actions\DetachParticipantAction;
+use RoundlyConsulting\Appointments\Actions\RescheduleAppointmentAction;
+use RoundlyConsulting\Appointments\Actions\ScheduleRecurringAppointmentAction;
+use RoundlyConsulting\Appointments\Actions\TransitionAppointmentAction;
+
+$appointment = app(CreateAppointmentAction::class)->execute($appointmentData);
+app(AttachParticipantAction::class)->execute($appointment, new ParticipantData($user), preventConflicts: true);
+app(DetachParticipantAction::class)->execute($appointment, $user);
+app(RescheduleAppointmentAction::class)->execute($appointment, $newStart, durationMinutes: 45);
+app(TransitionAppointmentAction::class)->execute($appointment, Status::Confirmed);
+app(ScheduleRecurringAppointmentAction::class)->execute($appointmentData, $rule);
+```
+
+Actions called directly bypass `Appointments::fake()`; the facade, an injected manager and the
+model shortcuts do not.
+
+### Facade reference
+
+| Method | Returns |
+|---|---|
+| `schedule(string $name)` | `AppointmentBuilder` — `startingAt/lasting/until/describedAs/withMeta/withStatus/withParticipant/located/at/venue/withContactEmail/withContactPhone/requireApprovalFrom/approvalRule/approvalQuorum/approvalStages/rejectOnStageRejection/approvalWorkflow/approvalStageApprovers/recurring/preventConflicts` → `create()` / `createRecurring()` |
+| `create(AppointmentData $data)` | `Appointment` |
+| `createRecurring(AppointmentData $data, ?RecurrenceData $rule = null)` | `Collection<int, Appointment>` |
+| `for(Appointment $appointment)` | `AppointmentHandle` — `reschedule()`, `transition()`, `confirm()`, `cancel()`, `complete()`, `decline()`, `markNoShow()`, `participants()`, `ics()` |
+| `for($appointment)->participants()` | `AppointmentParticipants` — `add()`, `remove()`, `has()`, `all()` |
+| `conflicts(Model $participant, $start, $end, ?Appointment $ignore = null)` | `Collection<int, Appointment>` |
+| `isAvailable(Model $participant, $start, $end, ?Appointment $ignore = null)` | `bool` |
+| `ics(iterable $appointments)` | `string` |
+| `occurrences(CarbonInterface $start, RecurrenceData $rule)` | `list<CarbonImmutable>` |
+| `fake()` | `AppointmentsFake` |
 
 ### Relationships
 
@@ -308,9 +407,9 @@ Both models use soft deletes, so deleting an appointment or participant retains 
 | `RoundlyConsulting\Appointments\Events\AppointmentUpdated` | an appointment is updated |
 | `RoundlyConsulting\Appointments\Events\AppointmentRescheduled` | an appointment is rescheduled (carries `$previousStartsAt`) |
 | `RoundlyConsulting\Appointments\Events\AppointmentStatusChanged` | a status transition occurs (carries `$from` and `$to`) |
-| `RoundlyConsulting\Appointments\Events\ParticipantCreated` | a participant is created |
-| `RoundlyConsulting\Appointments\Events\ParticipantUpdated` | a participant is updated |
-| `RoundlyConsulting\Appointments\Events\ParticipantDeleted` | a participant is deleted |
+| `RoundlyConsulting\Appointments\Events\ParticipantCreated` | a participant is added for the first time |
+| `RoundlyConsulting\Appointments\Events\ParticipantUpdated` | a participant row is updated, or a removed participant is added again |
+| `RoundlyConsulting\Appointments\Events\ParticipantDeleted` | a participant is removed |
 
 ## Integrates with
 
@@ -333,7 +432,7 @@ come with it.
 ```php
 use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
 
-$appointment = Appointments::for('Clinic visit')
+$appointment = Appointments::schedule('Clinic visit')
     ->startingAt('2026-07-01 09:00')
     ->located(51.5074, -0.1278, 'Clinic A')   // latitude, longitude, venue name
     ->create();
@@ -350,7 +449,7 @@ emits a `GEO:lat;lng` line when coordinates are present.
 ### Guest contacts (contacts)
 
 ```php
-$appointment = Appointments::for('Guest booking')
+$appointment = Appointments::schedule('Guest booking')
     ->startingAt('2026-07-01 09:00')
     ->withContactEmail('guest@example.com')
     ->withContactPhone('+441234567890')
@@ -375,7 +474,7 @@ Approved → `confirmed`, Rejected → `declined`, Cancelled/Expired → `cancel
 use RoundlyConsulting\Approvals\Enums\ApprovalRule;
 use RoundlyConsulting\Approvals\Facades\Approvals;
 
-$appointment = Appointments::for('Booking request')
+$appointment = Appointments::schedule('Booking request')
     ->startingAt('2026-07-01 09:00')
     ->requireApprovalFrom([$organiser, $clinician], ApprovalRule::Quorum, quorum: 1)
     ->create();
@@ -388,7 +487,7 @@ Staged pipelines and named workflow presets are supported too:
 ```php
 use RoundlyConsulting\Approvals\DataTransferObjects\StageDefinition;
 
-Appointments::for('Two-desk booking')
+Appointments::schedule('Two-desk booking')
     ->startingAt('2026-07-01 09:00')
     ->approvalStages([
         new StageDefinition([$reception]),
@@ -396,7 +495,7 @@ Appointments::for('Two-desk booking')
     ])
     ->create();
 
-Appointments::for('Preset booking')
+Appointments::schedule('Preset booking')
     ->startingAt('2026-07-01 09:00')
     ->approvalWorkflow('clinic')                 // config('approvals.workflows.clinic')
     ->approvalStageApprovers([[$reception], [$clinician]])
@@ -423,6 +522,41 @@ $appointment->approvedReviewsCount();
 Author models use the reviews `CanReview` trait.
 
 ## Testing
+
+### Faking appointments in your app's tests
+
+`Appointments::fake()` swaps in a recording `AppointmentsFake` — behind the facade **and** in the
+container, so an injected `AppointmentManager` is faked too. Operations still run against the
+database (availability checks, `participants()` reads and the package events keep working);
+every write is recorded, whether it came through the facade, an injected manager, the builder,
+a `for()` handle or a model shortcut such as `$appointment->cancel()`.
+
+```php
+use RoundlyConsulting\Appointments\Enums\Status;
+use RoundlyConsulting\Appointments\Facades\Appointments;
+use RoundlyConsulting\Appointments\Models\Appointment;
+
+$fake = Appointments::fake();
+
+$this->post('/bookings', [...]);
+
+$fake->assertScheduled(fn (Appointment $appointment) => $appointment->name === 'Consultation');
+$fake->assertTransitioned(fn (Appointment $appointment, Status $to, Status $from) => $to === Status::Cancelled);
+$fake->assertRescheduled(fn (Appointment $appointment, $previousStartsAt) => true);
+$fake->assertParticipantAdded(fn (Appointment $appointment, $participant, $row) => $participant->is($user));
+$fake->assertParticipantRemoved(fn (Appointment $appointment, $participant) => $participant->is($user));
+
+$fake->assertNothingScheduled();
+$fake->assertNothingRescheduled();
+$fake->assertNothingTransitioned();
+$fake->assertNoParticipantAdded();
+$fake->assertNoParticipantRemoved();
+```
+
+Every assertion also works statically (`Appointments::assertScheduled()`). Participants listed on
+a **new** appointment are part of its scheduling; only `participants()->add()` counts as added.
+
+### The package's own suite
 
 ```bash
 composer test

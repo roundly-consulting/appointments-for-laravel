@@ -10,17 +10,32 @@ Initial public release.
 
 ### Added
 
-- Appointments with start, duration or end time and a time zone, created through the fluent
-  `Appointments::for()` builder or `CreateAppointmentAction` with an `AppointmentData` DTO.
+- Appointments with start, duration or end time and a time zone, scheduled through the fluent
+  `Appointments::schedule($name)` builder or `Appointments::create(AppointmentData)`, backed by an
+  injectable `AppointmentManager` and one action per operation — facade, dependency injection and
+  the raw action run the same code.
+- `Appointments::for($appointment)` handle: `reschedule()`, `transition()`, `confirm()`,
+  `cancel()`, `complete()`, `decline()`, `markNoShow()`, `ics()` and `participants()`.
 - Participants of any Eloquent model with roles, via a polymorphic relation and the
-  `HasAppointments` trait.
-- Guarded status lifecycle: `confirm()`, `cancel()`, `complete()`, `decline()` and `markNoShow()`.
-- Double-booking detection with `ConflictDetector` and the opt-in `preventConflicts()` guard.
-- `Appointments::reschedule()` and recurring series (`RecurrenceData`, `createRecurring()`).
+  `HasAppointments` trait; `for($appointment)->participants()->add()/remove()/has()/all()`
+  (`AttachParticipantAction`, `DetachParticipantAction`) with a duplicate guard
+  (`DuplicateParticipantException`), an opt-in conflict guard, cross-appointment refusal
+  (`ParticipantNotFoundException`) and restore-on-re-add.
+- Guarded status lifecycle; the model shortcuts `confirm()`, `cancel()`, `complete()`,
+  `decline()`, `markNoShow()` and `transitionTo()` go through the manager.
+- Double-booking detection: `Appointments::conflicts()` / `isAvailable()` and the opt-in
+  `preventConflicts` guard on create, reschedule and participant add.
+- Recurring series (`RecurrenceData`, `createRecurring()` on the builder and the facade) and
+  `Appointments::occurrences()` to preview a rule without writing.
 - Query scopes `upcoming()`, `past()`, `between()`, `overlapping()`, `withStatus()` and
   `forParticipant()`.
-- Standards-compliant calendar export: `toIcs()` for one appointment, `IcsGenerator` for many.
+- Standards-compliant calendar export: `Appointments::for($appointment)->ics()` / `toIcs()` for
+  one appointment, `Appointments::ics($appointments)` for a feed.
 - Events for appointment create, update, reschedule and status changes, and participant changes.
+- `Appointments::fake()`: a recording `AppointmentsFake` (a manager subtype, so injected managers
+  get it too) that sees every write — including builder, handle and model-shortcut calls — with
+  `assertScheduled`, `assertRescheduled`, `assertTransitioned`, `assertParticipantAdded`,
+  `assertParticipantRemoved` and their `assertNothing*` / `assertNo*` counterparts.
 - Venue location with `located()`, `distanceFrom()` and `withinRadius()`, built on
   geolocation-for-laravel.
 - Guest contact e-mail and phone on a booking, built on contacts-for-laravel.
