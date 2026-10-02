@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 use RoundlyConsulting\Appointments\Facades\Appointments;
 use RoundlyConsulting\Appointments\Tests\Models\CustomAppointment;
 use RoundlyConsulting\Appointments\Tests\Models\CustomParticipant;
 use RoundlyConsulting\Appointments\Tests\Models\User;
+use RoundlyConsulting\Approvals\Enums\ApprovalStatus;
+use RoundlyConsulting\Approvals\Facades\Approvals;
+use RoundlyConsulting\Approvals\Models\Approval;
 
 /**
  * S — the model-swap proofs, driven the way a host actually drives them: both
@@ -90,4 +94,25 @@ it('resolves participants from a swapped parent through the explicit foreign key
         // The round trip back up: belongsTo from the swapped child must reach the swapped
         // parent, not the packaged one.
         ->and($participants->first()->appointment::class)->toBe(CustomAppointment::class);
+});
+
+/**
+ * `appointments:expire-approvals` scopes the expiry to the CONFIGURED model's morph class: a
+ * swapped appointment's approvals are stored under the host subclass, so scoping to the
+ * packaged class would lapse nothing.
+ */
+it('expires the swapped appointment model\'s approvals', function (): void {
+    $organiser = User::create();
+
+    $appointment = Appointments::schedule('Expiring booking')
+        ->startingAt('2026-08-03 09:00')
+        ->requireApprovalFrom($organiser)
+        ->create();
+
+    Approvals::for($appointment)->as($organiser)->expiringAt(CarbonImmutable::now()->subHour())->ask();
+
+    $this->artisan('appointments:expire-approvals')->assertSuccessful();
+
+    expect(Approval::query()->where('approvable_type', CustomAppointment::class)->sole()->status)
+        ->toBe(ApprovalStatus::Expired);
 });
