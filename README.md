@@ -69,6 +69,7 @@ The published config file lives at `config/appointments.php`:
 return [
     'model' => Appointment::class,
     'participant' => Participant::class,
+    'key_type' => env('APPOINTMENTS_KEY_TYPE', 'bigint'),
     'table_names' => [
         'appointments' => 'appointments',
         'participants' => 'appointment_participants',
@@ -93,9 +94,10 @@ return [
 |---|---|---|---|
 | `model` | `class-string` | `RoundlyConsulting\Appointments\Models\Appointment` | The Eloquent model used for appointments. Point it at your own subclass to customise behaviour. |
 | `participant` | `class-string` | `RoundlyConsulting\Appointments\Models\Participant` | The Eloquent model used for appointment participants. |
-| `table_names.appointments` | `string` | `appointments` | Table name for appointments. |
-| `table_names.participants` | `string` | `appointment_participants` | Table name for participants. |
-| `timezone` | `?string` | `null` | Default timezone stored on an appointment. `null` falls back to `config('app.timezone')`. |
+| `key_type` | `string` | `bigint` (`APPOINTMENTS_KEY_TYPE`) | Key type of the polymorphic `participant_id` column the participants migration creates: `bigint`, `uuid` or `ulid`. Match the primary keys of the models that take part (they must share one type); set it before running the migrations. Any other value falls back to `bigint`. |
+| `table_names.appointments` | `string` | `appointments` | Table the migrations create and the `Appointment` model reads and writes. Set it before running the migrations. |
+| `table_names.participants` | `string` | `appointment_participants` | Table the migrations create and the `Participant` model reads and writes. Set it before running the migrations. |
+| `timezone` | `?string` | `null` | The zone stored on a new appointment when none is given, and the zone a wall-clock string without an offset is read in. `null` uses `config('app.timezone')`. Each appointment keeps the zone it was booked in, so changing this later does not re-time existing appointments. |
 | `default_duration_minutes` | `int` | `60` | Duration applied when none is supplied, used to derive `ends_at` from `starts_at`. |
 | `prevent_conflicts` | `bool` | `false` | When `true`, creating, rescheduling or adding a participant throws on an overlapping booking for a participant. Can also be enabled per call. |
 | `recurrence.max_occurrences` | `int` | `365` | Hard cap on the number of occurrences a recurring series may expand to. |
@@ -150,10 +152,14 @@ $appointment = Appointments::create(new AppointmentData(
 ));
 ```
 
-Every guard runs before the first write, so a refused booking leaves no row and fires no event.
-Listing the same model twice throws `DuplicateParticipantException`.
+A booking is written in one transaction, and its events fire only once that commits. So a refused
+or failed booking — a conflict, a participant listed twice (`DuplicateParticipantException`), an
+invalid contact, an unknown approval workflow — leaves no row and fires no event.
 
-Instants are stored in UTC; the appointment's `timezone` drives local display:
+`starts_at` and `ends_at` always hold UTC, whatever `app.timezone` is, and read back as UTC
+`CarbonImmutable`s. A Carbon you pass keeps its instant. A wall-clock string without an offset is
+read in the `timezone:` you give, else `appointments.timezone`, else `app.timezone`. That zone is
+stored on the appointment and drives local display:
 
 ```php
 $appointment->startsAtLocal();   // CarbonImmutable in the appointment's timezone
@@ -164,9 +170,12 @@ $appointment->durationInMinutes();
 
 ### Duration and end time
 
-Provide a duration (`lasting()` / `durationMinutes`) or an explicit end (`until()` /
-`ends_at`). When only one is given the other is derived; when neither is given the
-`default_duration_minutes` config value is used.
+Provide a duration (`lasting()` / `durationMinutes`) or an explicit end (`until()`). When only
+one is given the other is derived; when neither is given the `default_duration_minutes` config value
+is used. `until()` is measured against the start whether you call it before or after
+`startingAt()`, and whichever of `lasting()` / `until()` comes last wins. A duration under one
+minute, or an end that does not come after the start, throws `InvalidScheduleException` before
+anything is written. `reschedule()` applies the same rule to `durationMinutes`.
 
 ### Working with one appointment
 
@@ -253,10 +262,15 @@ Appointments::conflicts($user, $start, $end);                // Collection<Appoi
 Appointments::conflicts($user, $start, $end, ignore: $appt); // leave one booking out
 ```
 
+`$start` and `$end` may be Carbons in any timezone; they are compared as the instants they are.
+
 With `prevent_conflicts` enabled (globally or per call), creating, rescheduling or adding a
 participant that overlaps an existing booking throws `SchedulingConflictException`, which carries
 the conflicting appointments. Touching ranges (one ends exactly when the next begins) do not
-conflict; cancelled and declined appointments are ignored.
+conflict; cancelled and declined appointments are ignored. The check holds under concurrency: it
+runs in the transaction that writes, after locking each participant's row (and, for a reschedule or
+an added participant, the appointment's row), so two simultaneous bookings of one person cannot both
+pass it. (SQLite has no row locks; it serializes writers instead.)
 
 ### Recurring appointments
 
@@ -279,11 +293,20 @@ Appointments::occurrences(CarbonImmutable::parse('2026-07-06 09:00'), $rule); //
 Each occurrence is materialised as its own appointment, linked by a shared `recurrence_group`
 UUID, and carries everything a single `create()` would — location, coordinates, guest contacts
 and its own approval request. The series is all-or-nothing: if any occurrence fails (e.g. a
-`SchedulingConflictException` under `preventConflicts()`), none of it is kept.
+`SchedulingConflictException` under `preventConflicts()`), none of it is kept, and — since events
+wait for the commit — no `AppointmentCreated` (or participant event) fires for any of it.
 `createRecurring()` falls back to the DTO's own `recurrence`; with no rule at all it creates the
-single appointment. Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval`, a
-`count` or `until` bound, and `byWeekday` filtering. Expansion is capped by
-`recurrence.max_occurrences`.
+single appointment.
+
+Recurrence supports `daily`/`weekly`/`monthly` frequencies, an `interval` (every Nth day, week or
+month), a `count` or `until` bound, and `byWeekday` (ISO 1 = Monday … 7 = Sunday). With
+`byWeekday`, every listed weekday of each active period occurs — e.g.
+`new RecurrenceData(Frequency::Weekly, interval: 2, byWeekday: [1, 3])` is Monday and Wednesday of
+every other week, and `Frequency::Monthly` with `byWeekday: [1]` is every Monday of each active
+month. An `until` at midnight is read as a date and includes that day. The rule is expanded in the
+appointment's timezone, so a weekly 09:00 stays 09:00 local across a daylight-saving change. An
+`interval` or `count` below one, or a weekday outside 1–7, throws `InvalidRecurrenceException`.
+Expansion is capped by `recurrence.max_occurrences`.
 
 ### Querying
 
@@ -299,6 +322,8 @@ Appointment::query()->overlapping($start, $end)->get();
 Appointment::query()->withStatus(Status::Confirmed, Status::Completed)->get();
 Appointment::query()->past()->get();
 ```
+
+The time scopes compare against the UTC columns, so their Carbon arguments may be in any timezone.
 
 Add the `HasAppointments` trait to any host model to expose its appointments:
 
@@ -317,7 +342,9 @@ $user->appointmentParticipations;            // the participant rows
 ### Calendar (ICS) export
 
 Generate RFC 5545 calendar text for one appointment or a whole feed — the package stays
-HTTP-free, so you decide how to deliver it:
+HTTP-free, so you decide how to deliver it. Each event's `UID` is the appointment's stored random
+`uuid` at your `app.url` host (`…@example.com`), so it stays unique across apps and survives a
+re-seeded database:
 
 ```php
 $ics = Appointments::for($appointment)->ics();                 // or $appointment->toIcs()
@@ -411,9 +438,12 @@ Both models use soft deletes, so deleting an appointment or participant retains 
 | `RoundlyConsulting\Appointments\Events\ParticipantUpdated` | a participant row is updated, or a removed participant is added again |
 | `RoundlyConsulting\Appointments\Events\ParticipantDeleted` | a participant is removed |
 
+Every package event implements `ShouldDispatchAfterCommit`: inside a database transaction it fires
+once that commits, and never for a write that rolls back.
+
 ## Integrates with
 
-Appointments hard-requires five roundly-consulting provider packages and wires them into the
+Appointments hard-requires six roundly-consulting packages and wires them into the
 bundled `Appointment` model. If you swap the model via `config('appointments.model')`, extend
 the packaged model — the traits (`HasLocation`, `HasContacts`, `HasReviews`, `RequiresApproval`)
 come with it.
@@ -468,7 +498,9 @@ Google Calendar, Apple Calendar and Outlook have nothing to act on without one.
 
 Opt a booking into confirmation sign-off. The appointment is created `pending` and a
 `SyncAppointmentStatusFromApproval` listener moves it as the approval request resolves:
-Approved → `confirmed`, Rejected → `declined`, Cancelled/Expired → `cancelled`.
+Approved → `confirmed`, Rejected → `declined`, Cancelled/Expired → `cancelled`. A final status
+(`cancelled`, `declined`, `completed`, `no_show`) is never left: approving the still-open request of
+a booking the customer already cancelled changes nothing. Only the named approvers can decide.
 
 ```php
 use RoundlyConsulting\Approvals\Enums\ApprovalRule;
@@ -503,7 +535,9 @@ Appointments::schedule('Preset booking')
 ```
 
 Approver models use the approvals `GivesApprovals` trait. The `appointments:expire-approvals`
-command lapses expired decisions.
+command runs the approvals engine's expiry, which is app-wide: it lapses every expired approval
+decision and request (other subjects' included), and the appointments whose requests resolve move
+to `cancelled`.
 
 ### Post-visit reviews (reviews)
 
@@ -555,6 +589,7 @@ $fake->assertNoParticipantRemoved();
 
 Every assertion also works statically (`Appointments::assertScheduled()`). Participants listed on
 a **new** appointment are part of its scheduling; only `participants()->add()` counts as added.
+Asking for the status an appointment already has is a no-op, so it is not recorded as a transition.
 
 ### The package's own suite
 
