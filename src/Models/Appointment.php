@@ -67,6 +67,14 @@ class Appointment extends Model
 
     protected $guarded = [];
 
+    public function getTable(): string
+    {
+        /** @var string $table */
+        $table = config('appointments.table_names.appointments', 'appointments');
+
+        return $table;
+    }
+
     /** @var array<string, class-string> */
     protected $dispatchesEvents = [
         'created' => AppointmentCreated::class,

@@ -29,6 +29,7 @@ uses(TestCase::class)->in(
     'Geolocation',
     'Migrations',
     'Provider',
+    'Regression',
     'Reviews',
     'Scopes',
     'Support',
