@@ -97,7 +97,10 @@ final class AppointmentsFake extends AppointmentManager
 
         $appointment = parent::transitionFor($appointment, $to);
 
-        $this->transitioned[] = ['appointment' => $appointment, 'from' => $from, 'to' => $to];
+        // Asking for the status it already has is a no-op — no write, no event — so not a transition.
+        if ($from !== $to) {
+            $this->transitioned[] = ['appointment' => $appointment, 'from' => $from, 'to' => $to];
+        }
 
         return $appointment;
     }
