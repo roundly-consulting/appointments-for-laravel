@@ -16,6 +16,8 @@ final readonly class AppointmentData
      * @param  array<string, mixed>|null  $meta
      * @param  list<ParticipantData>  $participants
      * @param  list<ContactData>  $contacts
+     * @param  ?string  $recurrenceGroup  links the occurrences of one series; set by
+     *                                    `createRecurring()`
      *
      * @throws InvalidScheduleException when the duration is not positive
      */
@@ -34,6 +36,7 @@ final readonly class AppointmentData
         public ?Coordinates $coordinates = null,
         public array $contacts = [],
         public ?AppointmentApprovalData $approval = null,
+        public ?string $recurrenceGroup = null,
     ) {
         if ($this->durationMinutes !== null && $this->durationMinutes < 1) {
             throw InvalidScheduleException::nonPositiveDuration($this->durationMinutes);
@@ -43,9 +46,10 @@ final readonly class AppointmentData
     /**
      * The same appointment at another start: one occurrence of a recurring series. Every field
      * carries over — location, coordinates, contacts and approval included — so an occurrence
-     * is exactly what scheduling it on its own would create; only the rule itself is dropped.
+     * is exactly what scheduling it on its own would create; only the rule itself is dropped,
+     * and the occurrence joins the series' group.
      */
-    public function forOccurrence(CarbonImmutable $startsAt): self
+    public function forOccurrence(CarbonImmutable $startsAt, ?string $recurrenceGroup = null): self
     {
         return new self(
             name: $this->name,
@@ -62,6 +66,7 @@ final readonly class AppointmentData
             coordinates: $this->coordinates,
             contacts: $this->contacts,
             approval: $this->approval,
+            recurrenceGroup: $recurrenceGroup ?? $this->recurrenceGroup,
         );
     }
 }

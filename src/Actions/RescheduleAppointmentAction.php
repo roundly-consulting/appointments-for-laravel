@@ -5,20 +5,27 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Appointments\Actions;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Appointments\Events\AppointmentRescheduled;
 use RoundlyConsulting\Appointments\Exceptions\InvalidScheduleException;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
+use RoundlyConsulting\Appointments\Support\SchedulingLock;
 
 final readonly class RescheduleAppointmentAction
 {
     public function __construct(
         private ConflictDetector $conflicts,
+        private SchedulingLock $lock,
     ) {}
 
     /**
+     * With conflicts prevented, the appointment's row and then every participant's row are locked
+     * before the clash check, in the same transaction as the move — a concurrent booking or a
+     * participant joining meanwhile cannot slip in between.
+     *
      * @throws InvalidScheduleException when the duration is not positive
      * @throws SchedulingConflictException when conflicts are prevented and a participant is booked
      */
@@ -38,41 +45,62 @@ final readonly class RescheduleAppointmentAction
         }
 
         $endsAt = $startsAt->addMinutes($minutes);
+        $prevent = $this->lock->preventing($preventConflicts);
 
-        $this->guardAgainstConflicts($appointment, $startsAt, $endsAt, $preventConflicts);
+        // Read up front only to learn which connections need a transaction; the participants that
+        // count are re-read under the appointment's lock.
+        $participants = $prevent ? $this->participantsOf($appointment) : [];
 
-        $appointment->starts_at = $startsAt;
-        $appointment->duration_minutes = $minutes;
-        $appointment->ends_at = $endsAt;
-        $appointment->save();
+        return $this->lock->transaction($participants, function () use ($appointment, $startsAt, $endsAt, $minutes, $prevent, $previousStartsAt): Appointment {
+            if ($prevent) {
+                $this->lock->appointment($appointment);
 
-        Event::dispatch(new AppointmentRescheduled($appointment, $previousStartsAt));
-
-        return $appointment;
-    }
-
-    private function guardAgainstConflicts(
-        Appointment $appointment,
-        CarbonImmutable $startsAt,
-        CarbonImmutable $endsAt,
-        bool $preventConflicts,
-    ): void {
-        $prevent = $preventConflicts || (bool) config('appointments.prevent_conflicts', false);
-
-        if (! $prevent) {
-            return;
-        }
-
-        // Queried, not the loaded relation: a relation loaded before a participant joined would
-        // let the newcomer be double-booked.
-        foreach ($appointment->participants()->with('participant')->get() as $participant) {
-            $related = $participant->participant;
-
-            if ($related === null) {
-                continue;
+                $participants = $this->participantsOf($appointment);
+                $this->lock->participants($participants);
+                $this->guardAgainstConflicts($appointment, $participants, $startsAt, $endsAt);
             }
 
-            $conflicts = $this->conflicts->forParticipant($related, $startsAt, $endsAt, ignore: $appointment);
+            $appointment->starts_at = $startsAt;
+            $appointment->duration_minutes = $minutes;
+            $appointment->ends_at = $endsAt;
+            $appointment->save();
+
+            Event::dispatch(new AppointmentRescheduled($appointment, $previousStartsAt));
+
+            return $appointment;
+        });
+    }
+
+    /**
+     * The models taking part, queried rather than taken from the loaded relation: a relation
+     * loaded before a participant joined would let the newcomer be double-booked.
+     *
+     * @return list<Model>
+     */
+    private function participantsOf(Appointment $appointment): array
+    {
+        $models = [];
+
+        foreach ($appointment->participants()->with('participant')->get() as $participant) {
+            if ($participant->participant instanceof Model) {
+                $models[] = $participant->participant;
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * @param  list<Model>  $participants
+     */
+    private function guardAgainstConflicts(
+        Appointment $appointment,
+        array $participants,
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+    ): void {
+        foreach ($participants as $participant) {
+            $conflicts = $this->conflicts->forParticipant($participant, $startsAt, $endsAt, ignore: $appointment);
 
             if ($conflicts->isNotEmpty()) {
                 throw SchedulingConflictException::make($conflicts);

@@ -7,12 +7,14 @@ namespace RoundlyConsulting\Appointments\Actions;
 use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentApprovalData;
 use RoundlyConsulting\Appointments\DataTransferObjects\AppointmentData;
+use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
 use RoundlyConsulting\Appointments\Exceptions\DuplicateParticipantException;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
 use RoundlyConsulting\Appointments\Support\DefaultTimezone;
+use RoundlyConsulting\Appointments\Support\SchedulingLock;
 use RoundlyConsulting\Approvals\ApprovalsManager;
 
 final readonly class CreateAppointmentAction
@@ -20,11 +22,14 @@ final readonly class CreateAppointmentAction
     public function __construct(
         private ConflictDetector $conflicts,
         private ApprovalsManager $approvals,
+        private SchedulingLock $lock,
     ) {}
 
     /**
-     * Every guard runs before the first write, so a refused booking leaves no row and fires no
-     * event.
+     * The appointment, its participants, contacts and approval request are written in one
+     * transaction, and the package events fire only once it commits — so a refused or failed
+     * booking (a conflict, an invalid contact, an unknown approval workflow) leaves no row and
+     * fires no event.
      *
      * @throws DuplicateParticipantException when the same model is listed twice
      * @throws SchedulingConflictException when conflicts are prevented and a participant is booked
@@ -37,36 +42,46 @@ final readonly class CreateAppointmentAction
         $endsAt = $this->endsAt($startsAt, $data->durationMinutes);
 
         $this->guardAgainstDuplicates($data);
-        $this->guardAgainstConflicts($data, $startsAt, $endsAt);
 
-        $model = AppointmentModel::class();
+        $participants = array_map(static fn (ParticipantData $participant) => $participant->participant, $data->participants);
+        $prevent = $this->lock->preventing($data->preventConflicts);
 
-        $appointment = $model::query()->create([
-            'name' => $data->name,
-            'description' => $data->description,
-            'status' => $data->status,
-            'meta' => $data->meta,
-            'timezone' => $data->timezone ?? DefaultTimezone::resolve(),
-            'location' => $data->location,
-            'coordinates' => $data->coordinates,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'duration_minutes' => $data->durationMinutes,
-        ]);
+        return $this->lock->transaction($participants, function () use ($data, $startsAt, $endsAt, $participants, $prevent): Appointment {
+            if ($prevent) {
+                $this->lock->participants($participants);
+                $this->guardAgainstConflicts($data, $startsAt, $endsAt);
+            }
 
-        foreach ($data->participants as $participant) {
-            $appointment->participants()->create($participant->toAttributes());
-        }
+            $model = AppointmentModel::class();
 
-        foreach ($data->contacts as $contact) {
-            $appointment->addContact($contact);
-        }
+            $appointment = $model::query()->create([
+                'name' => $data->name,
+                'description' => $data->description,
+                'status' => $data->status,
+                'meta' => $data->meta,
+                'timezone' => $data->timezone ?? DefaultTimezone::resolve(),
+                'location' => $data->location,
+                'coordinates' => $data->coordinates,
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+                'duration_minutes' => $data->durationMinutes,
+                'recurrence_group' => $data->recurrenceGroup,
+            ]);
 
-        if ($data->approval !== null) {
-            $this->openApprovalRequest($appointment, $data->approval);
-        }
+            foreach ($data->participants as $participant) {
+                $appointment->participants()->create($participant->toAttributes());
+            }
 
-        return $appointment->load('participants');
+            foreach ($data->contacts as $contact) {
+                $appointment->addContact($contact);
+            }
+
+            if ($data->approval !== null) {
+                $this->openApprovalRequest($appointment, $data->approval);
+            }
+
+            return $appointment->load('participants');
+        });
     }
 
     /**
@@ -122,12 +137,6 @@ final readonly class CreateAppointmentAction
 
     private function guardAgainstConflicts(AppointmentData $data, CarbonImmutable $startsAt, CarbonImmutable $endsAt): void
     {
-        $prevent = $data->preventConflicts || (bool) config('appointments.prevent_conflicts', false);
-
-        if (! $prevent) {
-            return;
-        }
-
         foreach ($data->participants as $participant) {
             $conflicts = $this->conflicts->forParticipant($participant->participant, $startsAt, $endsAt);
 
