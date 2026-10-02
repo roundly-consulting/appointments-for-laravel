@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create($this->appointmentsTable(), function (Blueprint $table): void {
             $table->id();
+            $table->uuid('uuid')->unique();
             $table->string('name');
             $table->text('description')->nullable();
             $table->string('status')->default(Status::default()->value);

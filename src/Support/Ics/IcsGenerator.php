@@ -106,9 +106,16 @@ final class IcsGenerator
         return $lines;
     }
 
+    /**
+     * RFC 5545 §3.8.4.7 wants a UID that is unique across every calendar it can meet: the
+     * appointment's stored random UUID, qualified by the app's own host.
+     */
     private function uid(Appointment $appointment): string
     {
-        return sprintf('appointment-%s@roundly-consulting', $appointment->getKey());
+        $url = config('app.url');
+        $host = is_string($url) ? parse_url($url, PHP_URL_HOST) : null;
+
+        return sprintf('%s@%s', $appointment->uuid, is_string($host) && $host !== '' ? $host : 'appointments-for-laravel');
     }
 
     private function stamp(CarbonImmutable $moment): string

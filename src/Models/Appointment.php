@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Appointments\Models;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Carbon\CarbonInterval;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -34,6 +35,7 @@ use RoundlyConsulting\Reviews\Support\PendingReview;
 
 /**
  * @property int $id
+ * @property string $uuid
  * @property string $name
  * @property ?string $description
  * @property Status $status
@@ -64,6 +66,7 @@ class Appointment extends Model
 
     use HasLocation;
     use HasReviews;
+    use HasUuids;
     use RequiresApproval;
     use SoftDeletes;
 
@@ -88,6 +91,18 @@ class Appointment extends Model
         self::saving(static function (Appointment $appointment): void {
             $appointment->syncEndsAt();
         });
+    }
+
+    /**
+     * The `uuid` column, filled on insert (not the key: `id` stays the incrementing key). It is a
+     * stored, random identity — the ICS UID is built from it, so it stays globally unique across
+     * installs and survives an id being reused after a re-seed.
+     *
+     * @return list<string>
+     */
+    public function uniqueIds(): array
+    {
+        return ['uuid'];
     }
 
     /**
