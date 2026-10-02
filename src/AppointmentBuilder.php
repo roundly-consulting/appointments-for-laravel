@@ -14,7 +14,9 @@ use RoundlyConsulting\Appointments\DataTransferObjects\ParticipantData;
 use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
 use RoundlyConsulting\Appointments\Enums\ParticipantRole;
 use RoundlyConsulting\Appointments\Enums\Status;
+use RoundlyConsulting\Appointments\Exceptions\InvalidScheduleException;
 use RoundlyConsulting\Appointments\Models\Appointment;
+use RoundlyConsulting\Appointments\Support\DefaultTimezone;
 use RoundlyConsulting\Approvals\DataTransferObjects\StageDefinition;
 use RoundlyConsulting\Approvals\Enums\ApprovalRule;
 use RoundlyConsulting\Contacts\DataTransferObjects\ContactData;
@@ -31,6 +33,9 @@ final class AppointmentBuilder
     private ?CarbonImmutable $startsAt = null;
 
     private ?int $durationMinutes = null;
+
+    /** The raw `until()` input, resolved against the start once both are known. */
+    private CarbonInterface|string|null $endsAt = null;
 
     private ?string $timezone = null;
 
@@ -80,31 +85,45 @@ final class AppointmentBuilder
         private readonly string $name,
     ) {}
 
+    /**
+     * When it starts. A Carbon keeps its instant; a string without an offset is read in
+     * `$timezone`, else the zone given earlier, else `appointments.timezone` / `app.timezone`.
+     * `$timezone` is also stored on the appointment for local display.
+     */
     public function startingAt(CarbonInterface|string $at, ?string $timezone = null): self
     {
         $this->timezone = $timezone ?? $this->timezone;
-
-        $this->startsAt = $timezone !== null
-            ? CarbonImmutable::parse($at, $timezone)
-            : CarbonImmutable::parse($at);
+        $this->startsAt = $this->moment($at);
 
         return $this;
     }
 
+    /**
+     * How long it lasts, in minutes (at least one). Replaces an earlier `until()`.
+     *
+     * @throws InvalidScheduleException when the duration is not positive
+     */
     public function lasting(int $minutes): self
     {
+        if ($minutes < 1) {
+            throw InvalidScheduleException::nonPositiveDuration($minutes);
+        }
+
         $this->durationMinutes = $minutes;
+        $this->endsAt = null;
 
         return $this;
     }
 
+    /**
+     * When it ends — read like `startingAt()` and measured against the start whenever that is
+     * given, before or after this call. Replaces an earlier `lasting()`; `create()` throws
+     * InvalidScheduleException unless the end comes after the start.
+     */
     public function until(CarbonInterface|string $at): self
     {
-        $end = CarbonImmutable::parse($at, $this->timezone);
-
-        if ($this->startsAt !== null) {
-            $this->durationMinutes = (int) $this->startsAt->diffInMinutes($end);
-        }
+        $this->endsAt = $at;
+        $this->durationMinutes = null;
 
         return $this;
     }
@@ -314,10 +333,12 @@ final class AppointmentBuilder
 
     private function toData(): AppointmentData
     {
+        $startsAt = $this->startsAt ?? CarbonImmutable::now();
+
         return new AppointmentData(
             name: $this->name,
-            startsAt: $this->startsAt ?? CarbonImmutable::now(),
-            durationMinutes: $this->durationMinutes,
+            startsAt: $startsAt,
+            durationMinutes: $this->durationMinutes($startsAt),
             timezone: $this->timezone,
             description: $this->description,
             meta: $this->meta,
@@ -330,6 +351,33 @@ final class AppointmentBuilder
             contacts: $this->contacts,
             approval: $this->approvalData(),
         );
+    }
+
+    /**
+     * The explicit duration, or the one `until()` implies against the final start.
+     *
+     * @throws InvalidScheduleException when the end does not come after the start
+     */
+    private function durationMinutes(CarbonImmutable $startsAt): ?int
+    {
+        if ($this->endsAt === null) {
+            return $this->durationMinutes;
+        }
+
+        $endsAt = $this->moment($this->endsAt);
+
+        if (! $endsAt->greaterThan($startsAt)) {
+            throw InvalidScheduleException::endsBeforeStart($startsAt, $endsAt);
+        }
+
+        return (int) $startsAt->diffInMinutes($endsAt);
+    }
+
+    private function moment(CarbonInterface|string $at): CarbonImmutable
+    {
+        return $at instanceof CarbonInterface
+            ? CarbonImmutable::instance($at)
+            : CarbonImmutable::parse($at, $this->timezone ?? DefaultTimezone::resolve());
     }
 
     private function approvalData(): ?AppointmentApprovalData

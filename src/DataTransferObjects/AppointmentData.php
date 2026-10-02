@@ -6,6 +6,7 @@ namespace RoundlyConsulting\Appointments\DataTransferObjects;
 
 use Carbon\CarbonImmutable;
 use RoundlyConsulting\Appointments\Enums\Status;
+use RoundlyConsulting\Appointments\Exceptions\InvalidScheduleException;
 use RoundlyConsulting\Contacts\DataTransferObjects\ContactData;
 use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
 
@@ -15,6 +16,8 @@ final readonly class AppointmentData
      * @param  array<string, mixed>|null  $meta
      * @param  list<ParticipantData>  $participants
      * @param  list<ContactData>  $contacts
+     *
+     * @throws InvalidScheduleException when the duration is not positive
      */
     public function __construct(
         public string $name,
@@ -31,7 +34,11 @@ final readonly class AppointmentData
         public ?Coordinates $coordinates = null,
         public array $contacts = [],
         public ?AppointmentApprovalData $approval = null,
-    ) {}
+    ) {
+        if ($this->durationMinutes !== null && $this->durationMinutes < 1) {
+            throw InvalidScheduleException::nonPositiveDuration($this->durationMinutes);
+        }
+    }
 
     /**
      * The same appointment at another start: one occurrence of a recurring series. Every field

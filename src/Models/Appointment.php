@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use RoundlyConsulting\Appointments\AppointmentManager;
+use RoundlyConsulting\Appointments\Casts\UtcDateTime;
 use RoundlyConsulting\Appointments\Database\Factories\AppointmentFactory;
 use RoundlyConsulting\Appointments\Enums\Status;
 use RoundlyConsulting\Appointments\Events\AppointmentCreated;
@@ -21,6 +22,7 @@ use RoundlyConsulting\Appointments\Events\AppointmentUpdated;
 use RoundlyConsulting\Appointments\Exceptions\CannotReviewAppointmentException;
 use RoundlyConsulting\Appointments\Models\Concerns\HasAppointmentScopes;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
+use RoundlyConsulting\Appointments\Support\DefaultTimezone;
 use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Approvals\Traits\RequiresApproval;
 use RoundlyConsulting\Contacts\Concerns\HasContacts;
@@ -119,23 +121,17 @@ class Appointment extends Model
         return $default;
     }
 
+    /**
+     * The appointment's own zone; a row stored without one (a factory, a hand insert) falls back
+     * to `appointments.timezone`, then `app.timezone`.
+     */
     public function resolveTimezone(): string
     {
         if ($this->timezone !== null && $this->timezone !== '') {
             return $this->timezone;
         }
 
-        /** @var string|null $configured */
-        $configured = config('appointments.timezone');
-
-        if ($configured !== null && $configured !== '') {
-            return $configured;
-        }
-
-        /** @var string $appTimezone */
-        $appTimezone = config('app.timezone', 'UTC');
-
-        return $appTimezone;
+        return DefaultTimezone::resolve();
     }
 
     public function startsAtLocal(): CarbonImmutable
@@ -252,8 +248,9 @@ class Appointment extends Model
             'coordinates' => CoordinatesCast::class,
             'latitude' => 'float',
             'longitude' => 'float',
-            'starts_at' => 'immutable_datetime',
-            'ends_at' => 'immutable_datetime',
+            // UTC in, UTC out — independent of app.timezone (see UtcDateTime).
+            'starts_at' => UtcDateTime::class,
+            'ends_at' => UtcDateTime::class,
             'duration_minutes' => 'integer',
         ];
     }

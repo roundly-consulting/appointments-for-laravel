@@ -63,8 +63,11 @@ return [
     | Default timezone
     |--------------------------------------------------------------------------
     |
-    | The timezone stored on an appointment when none is supplied. Leave null
-    | to fall back to the host application's timezone (config('app.timezone')).
+    | The timezone stored on a new appointment when none is supplied, and the
+    | zone a wall-clock string without an offset ("2026-07-01 17:30") is read in.
+    | Leave null to use the host application's timezone (config('app.timezone')).
+    | Changing it later does not re-time existing appointments: each keeps the
+    | zone it was booked in. The starts_at / ends_at columns always hold UTC.
     |
     */
     'timezone' => null,

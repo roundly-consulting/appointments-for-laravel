@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Appointments\Models\Concerns;
 
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
+use RoundlyConsulting\Appointments\Casts\UtcDateTime;
 use RoundlyConsulting\Appointments\Enums\Status;
 
 /**
+ * The time scopes compare against UTC columns, so every bound is converted to UTC first: the
+ * query builder binds a Carbon as its own wall-clock, and a non-UTC Carbon would otherwise be
+ * compared as the wrong instant.
+ *
  * @phpstan-require-extends Model
  */
 trait HasAppointmentScopes
@@ -20,7 +25,7 @@ trait HasAppointmentScopes
      */
     public function scopeUpcoming(Builder $query): void
     {
-        $query->where('starts_at', '>=', Carbon::now());
+        $query->where('starts_at', '>=', CarbonImmutable::now()->utc());
     }
 
     /**
@@ -28,7 +33,7 @@ trait HasAppointmentScopes
      */
     public function scopePast(Builder $query): void
     {
-        $query->where('starts_at', '<', Carbon::now());
+        $query->where('starts_at', '<', CarbonImmutable::now()->utc());
     }
 
     /**
@@ -36,7 +41,7 @@ trait HasAppointmentScopes
      */
     public function scopeBetween(Builder $query, CarbonInterface $from, CarbonInterface $to): void
     {
-        $query->whereBetween('starts_at', [$from, $to]);
+        $query->whereBetween('starts_at', [UtcDateTime::toUtc($from), UtcDateTime::toUtc($to)]);
     }
 
     /**
@@ -48,6 +53,9 @@ trait HasAppointmentScopes
      */
     public function scopeOverlapping(Builder $query, CarbonInterface $start, CarbonInterface $end): void
     {
+        $start = UtcDateTime::toUtc($start);
+        $end = UtcDateTime::toUtc($end);
+
         $query
             ->where('starts_at', '<', $end)
             ->where(function (Builder $inner) use ($start): void {

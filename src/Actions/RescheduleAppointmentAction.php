@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Appointments\Actions;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Appointments\Events\AppointmentRescheduled;
+use RoundlyConsulting\Appointments\Exceptions\InvalidScheduleException;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
@@ -17,6 +18,10 @@ final readonly class RescheduleAppointmentAction
         private ConflictDetector $conflicts,
     ) {}
 
+    /**
+     * @throws InvalidScheduleException when the duration is not positive
+     * @throws SchedulingConflictException when conflicts are prevented and a participant is booked
+     */
     public function execute(
         Appointment $appointment,
         CarbonImmutable $startsAt,
@@ -27,6 +32,11 @@ final readonly class RescheduleAppointmentAction
 
         $startsAt = $startsAt->utc();
         $minutes = $durationMinutes ?? $appointment->durationInMinutes();
+
+        if ($minutes < 1) {
+            throw InvalidScheduleException::nonPositiveDuration($minutes);
+        }
+
         $endsAt = $startsAt->addMinutes($minutes);
 
         $this->guardAgainstConflicts($appointment, $startsAt, $endsAt, $preventConflicts);

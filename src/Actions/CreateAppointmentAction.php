@@ -12,6 +12,7 @@ use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
+use RoundlyConsulting\Appointments\Support\DefaultTimezone;
 use RoundlyConsulting\Approvals\ApprovalsManager;
 
 final readonly class CreateAppointmentAction
@@ -30,8 +31,8 @@ final readonly class CreateAppointmentAction
      */
     public function execute(AppointmentData $data): Appointment
     {
-        // Persist instants in UTC so the stored wall-clock value is unambiguous;
-        // the appointment's timezone column drives local display.
+        // The columns hold UTC; the appointment's timezone (stored, so a later config change
+        // does not re-time it) drives local display.
         $startsAt = $data->startsAt->utc();
         $endsAt = $this->endsAt($startsAt, $data->durationMinutes);
 
@@ -45,7 +46,7 @@ final readonly class CreateAppointmentAction
             'description' => $data->description,
             'status' => $data->status,
             'meta' => $data->meta,
-            'timezone' => $data->timezone,
+            'timezone' => $data->timezone ?? DefaultTimezone::resolve(),
             'location' => $data->location,
             'coordinates' => $data->coordinates,
             'starts_at' => $startsAt,
