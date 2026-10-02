@@ -535,9 +535,11 @@ Appointments::schedule('Preset booking')
 ```
 
 Approver models use the approvals `GivesApprovals` trait. The `appointments:expire-approvals`
-command runs the approvals engine's expiry, which is app-wide: it lapses every expired approval
-decision and request (other subjects' included), and the appointments whose requests resolve move
-to `cancelled`.
+command runs the approvals engine's expiry scoped to appointments (the configured
+`appointments.model`, by its morph-map alias when you register one): it lapses expired appointment
+approval decisions and requests only — other subjects' approvals are left alone — and the
+appointments whose requests resolve move to `cancelled`. Schedule it, e.g.
+`Schedule::command('appointments:expire-approvals')->everyFiveMinutes();`.
 
 ### Post-visit reviews (reviews)
 

@@ -43,5 +43,6 @@ Initial public release.
 - Venue location with `located()`, `distanceFrom()` and `withinRadius()`, built on
   geolocation-for-laravel.
 - Guest contact e-mail and phone on a booking, built on contacts-for-laravel.
-- Booking approval workflows (quorum, stages or a named preset), built on approvals-for-laravel.
+- Booking approval workflows (quorum, stages or a named preset), built on approvals-for-laravel,
+  and the `appointments:expire-approvals` command, which lapses expired appointment approvals only.
 - Post-visit reviews with verified attendance and rating summaries, built on reviews-for-laravel.
