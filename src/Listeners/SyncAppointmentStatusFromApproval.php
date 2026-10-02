@@ -18,6 +18,9 @@ use RoundlyConsulting\Approvals\Models\ApprovalRequest;
  * or expiry) moves the appointment Pending → Confirmed/Declined/Cancelled and fires
  * the appointment event surface — keeping that surface unchanged regardless of how
  * the decision arrived.
+ *
+ * `appointments.approvals.enforce_transitions` off (the default) forces the mapped status between
+ * live statuses (confirmed → declined included); a final status is never left either way.
  */
 final class SyncAppointmentStatusFromApproval
 {
@@ -34,6 +37,13 @@ final class SyncAppointmentStatusFromApproval
         $from = $subject->status;
 
         if ($target === null || $from === $target) {
+            return;
+        }
+
+        // A final status (cancelled, declined, completed, no-show) is never left — not even when
+        // not enforcing: an approver deciding a request that is still open must not bring a
+        // cancelled booking back to life.
+        if ($from->isFinal()) {
             return;
         }
 
