@@ -17,8 +17,6 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        env:
-          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.COMPOSER_AUTH_TOKEN }}"}}'
         run: composer update --no-interaction --prefer-dist
 
       - name: Run PHPStan
