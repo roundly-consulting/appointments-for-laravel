@@ -23,6 +23,7 @@ use RoundlyConsulting\Appointments\Events\AppointmentUpdated;
 use RoundlyConsulting\Appointments\Exceptions\CannotReviewAppointmentException;
 use RoundlyConsulting\Appointments\Models\Concerns\HasAppointmentScopes;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
+use RoundlyConsulting\Appointments\Support\AppointmentsConfig;
 use RoundlyConsulting\Appointments\Support\DefaultTimezone;
 use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Approvals\Traits\RequiresApproval;
@@ -75,10 +76,7 @@ class Appointment extends Model
 
     public function getTable(): string
     {
-        /** @var string $table */
-        $table = config('appointments.table_names.appointments', 'appointments');
-
-        return $table;
+        return AppointmentsConfig::appointmentsTable();
     }
 
     /** @var array<string, class-string> */
@@ -131,10 +129,7 @@ class Appointment extends Model
             return (int) $this->starts_at->diffInMinutes($this->ends_at);
         }
 
-        /** @var int $default */
-        $default = config('appointments.default_duration_minutes', 60);
-
-        return $default;
+        return AppointmentsConfig::defaultDurationMinutes();
     }
 
     /**
@@ -247,7 +242,7 @@ class Appointment extends Model
             return;
         }
 
-        $minutes = $this->duration_minutes ?? (int) config('appointments.default_duration_minutes', 60);
+        $minutes = $this->duration_minutes ?? AppointmentsConfig::defaultDurationMinutes();
 
         $this->duration_minutes = $minutes;
         $this->ends_at = CarbonImmutable::instance($this->starts_at)->addMinutes($minutes);

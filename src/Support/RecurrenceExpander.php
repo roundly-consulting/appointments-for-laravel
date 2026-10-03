@@ -126,8 +126,7 @@ final class RecurrenceExpander
 
     private function cap(RecurrenceData $rule): int
     {
-        /** @var int $max */
-        $max = config('appointments.recurrence.max_occurrences', 365);
+        $max = AppointmentsConfig::maxOccurrences();
 
         if ($rule->count !== null) {
             return min($rule->count, $max);

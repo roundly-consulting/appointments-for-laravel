@@ -12,6 +12,7 @@ use RoundlyConsulting\Appointments\Exceptions\DuplicateParticipantException;
 use RoundlyConsulting\Appointments\Exceptions\SchedulingConflictException;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
+use RoundlyConsulting\Appointments\Support\AppointmentsConfig;
 use RoundlyConsulting\Appointments\Support\ConflictDetector;
 use RoundlyConsulting\Appointments\Support\DefaultTimezone;
 use RoundlyConsulting\Appointments\Support\SchedulingLock;
@@ -119,7 +120,7 @@ final readonly class CreateAppointmentAction
 
     private function endsAt(CarbonImmutable $startsAt, ?int $durationMinutes): CarbonImmutable
     {
-        $minutes = $durationMinutes ?? (int) config('appointments.default_duration_minutes', 60);
+        $minutes = $durationMinutes ?? AppointmentsConfig::defaultDurationMinutes();
 
         return $startsAt->addMinutes($minutes);
     }

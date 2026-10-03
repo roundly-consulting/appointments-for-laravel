@@ -67,6 +67,7 @@ return [
     | The timezone stored on a new appointment when none is supplied, and the
     | zone a wall-clock string without an offset ("2026-07-01 17:30") is read in.
     | Leave null to use the host application's timezone (config('app.timezone')).
+    | Any other value must be a timezone identifier, or it throws.
     | Changing it later does not re-time existing appointments: each keeps the
     | zone it was booked in. The starts_at / ends_at columns always hold UTC.
     |
@@ -79,7 +80,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Applied when an appointment is created without an explicit duration or
-    | end time, to derive ends_at from starts_at.
+    | end time, to derive ends_at from starts_at. 1-525600; anything else
+    | throws an InvalidConfigurationException.
     |
     */
     'default_duration_minutes' => 60,
@@ -102,6 +104,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Guards the recurrence expander against runaway occurrence counts.
+    | "max_occurrences" must be a whole number from 1 to 100000.
     |
     */
     'recurrence' => [

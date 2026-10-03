@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\PackageToolkit\Enums\KeyType;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 return new class extends Migration
 {
@@ -28,9 +29,7 @@ return new class extends Migration
 
     private function participantsTable(): string
     {
-        /** @var string $name */
-        $name = config('appointments.table_names.participants', 'appointment_participants');
-
-        return $name;
+        // Absent means the packaged name; anything present must be a non-empty string.
+        return config('appointments.table_names.participants') === null ? 'appointment_participants' : Config::requireString('appointments.table_names.participants');
     }
 };

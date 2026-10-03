@@ -15,6 +15,7 @@ use RoundlyConsulting\Appointments\Events\ParticipantCreated;
 use RoundlyConsulting\Appointments\Events\ParticipantDeleted;
 use RoundlyConsulting\Appointments\Events\ParticipantUpdated;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
+use RoundlyConsulting\Appointments\Support\AppointmentsConfig;
 
 /**
  * @property int $appointment_id
@@ -37,10 +38,7 @@ class Participant extends Model
 
     public function getTable(): string
     {
-        /** @var string $table */
-        $table = config('appointments.table_names.participants', 'appointment_participants');
-
-        return $table;
+        return AppointmentsConfig::participantsTable();
     }
 
     /** @var array<string, class-string> */

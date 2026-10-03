@@ -2,8 +2,15 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Artisan;
 use RoundlyConsulting\Appointments\AppointmentsServiceProvider;
+use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
+use RoundlyConsulting\Appointments\Enums\Frequency;
 use RoundlyConsulting\Appointments\Facades\Appointments;
+use RoundlyConsulting\Appointments\Models\Appointment;
+use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Support\RecurrenceExpander;
 use RoundlyConsulting\Appointments\Tests\Models\User;
 use RoundlyConsulting\Approvals\Facades\Approvals;
 use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
@@ -80,4 +87,96 @@ it('refuses to migrate on an unrecognized key type (strict config)', function ()
         $migration = require __DIR__.'/../../database/migrations/0002_create_appointment_participants_table.php';
         $migration->up();
     })->toThrow(InvalidConfigurationException::class, 'Configuration value [appointments.key_type] must be one of [bigint, uuid, ulid] (case-insensitive), [nonsense] given.');
+});
+
+/*
+ | The non-switch settings were read unvalidated: `(int)` turned a default duration of
+ | `'an hour'` into 0 (an appointment ending as it starts), the recurrence cap was handed to
+ | `min()` as whatever it was, a blank table name reached SQL, and a timezone that was not a
+ | string quietly became the app's.
+ */
+
+it('refuses a junk or non-positive default duration (strict config)', function (mixed $minutes): void {
+    config()->set('appointments.default_duration_minutes', $minutes);
+
+    expect(fn () => Appointments::schedule('Consultation')->startingAt('2026-07-01 09:00')->create())
+        ->toThrow(InvalidConfigurationException::class, 'appointments.default_duration_minutes')
+        ->and(fn () => (new Appointment)->durationInMinutes())
+        ->toThrow(InvalidConfigurationException::class, 'appointments.default_duration_minutes');
+})->with(['word' => 'an hour', 'decimal' => '7.5', 'blank' => '', 'zero' => 0, 'negative' => '-15']);
+
+it('reads a canonical default duration string and an absent one as 60 (strict config)', function (): void {
+    config()->set('appointments.default_duration_minutes', '45');
+    $set = Appointments::schedule('Short')->startingAt('2026-07-01 09:00')->create();
+
+    config()->set('appointments.default_duration_minutes', null);
+    $absent = Appointments::schedule('Default')->startingAt('2026-07-01 09:00')->create();
+
+    expect($set->duration_minutes)->toBe(45)
+        ->and($absent->duration_minutes)->toBe(60);
+});
+
+it('refuses a junk or non-positive occurrence cap (strict config)', function (mixed $max): void {
+    config()->set('appointments.recurrence.max_occurrences', $max);
+
+    expect(fn () => app(RecurrenceExpander::class)->expand(CarbonImmutable::parse('2026-07-06 09:00'), new RecurrenceData(Frequency::Daily, count: 10)))
+        ->toThrow(InvalidConfigurationException::class, 'appointments.recurrence.max_occurrences');
+})->with(['word' => 'unlimited', 'zero' => 0, 'over the ceiling' => 100_001]);
+
+it('caps at 365 occurrences when no cap is configured (strict config)', function (): void {
+    config()->set('appointments.recurrence.max_occurrences', null);
+
+    expect(app(RecurrenceExpander::class)->expand(CarbonImmutable::parse('2026-07-06 09:00'), new RecurrenceData(Frequency::Daily, count: 400)))
+        ->toHaveCount(365);
+});
+
+it('refuses a blank or non-string table name (strict config)', function (string $key, Closure $table, mixed $value): void {
+    config()->set($key, $value);
+
+    expect($table)->toThrow(InvalidConfigurationException::class, $key);
+})->with([
+    'appointments' => ['appointments.table_names.appointments', fn () => (new Appointment)->getTable()],
+    'participants' => ['appointments.table_names.participants', fn () => (new Participant)->getTable()],
+])->with(['blank' => '', 'array' => [['appointments']], 'integer' => 1]);
+
+it('refuses to migrate onto a blank table name (strict config)', function (): void {
+    config()->set('appointments.table_names.participants', ' ');
+
+    expect(function (): void {
+        $migration = require __DIR__.'/../../database/migrations/0002_create_appointment_participants_table.php';
+        $migration->up();
+    })->toThrow(InvalidConfigurationException::class, 'appointments.table_names.participants');
+});
+
+it('uses the packaged table names when none are configured (strict config)', function (): void {
+    config()->set('appointments.table_names.appointments', null);
+    config()->set('appointments.table_names.participants', null);
+
+    expect((new Appointment)->getTable())->toBe('appointments')
+        ->and((new Participant)->getTable())->toBe('appointment_participants');
+});
+
+it('refuses a timezone that is not a timezone (strict config)', function (mixed $timezone): void {
+    config()->set('appointments.timezone', $timezone);
+
+    expect(fn () => Appointments::schedule('Consultation')->startingAt('2026-07-01 09:00')->create())
+        ->toThrow(InvalidConfigurationException::class, 'appointments.timezone');
+})->with(['typo' => 'Europe/Bratislva', 'array' => [['UTC']], 'integer' => 2]);
+
+it('keeps the about section rendering on a malformed host config (strict config)', function (): void {
+    config()->set('appointments.default_duration_minutes', 'an hour');
+    config()->set('appointments.recurrence.max_occurrences', 'unlimited');
+    config()->set('appointments.table_names.appointments', '');
+    config()->set('appointments.timezone', 'Europe/Bratislva');
+    config()->set('appointments.reviews.verified_attendance_resolver', 'App\\Missing');
+
+    Artisan::call('about', ['--only' => 'appointments']);
+
+    expect(Artisan::output())
+        ->toMatch('/Appointments table \.+ INVALID/')
+        ->toMatch('/Default timezone \.+ INVALID/')
+        ->toMatch('/Default duration \.+ INVALID/')
+        ->toMatch('/Max occurrences \.+ INVALID/')
+        ->toMatch('/Attendance resolver \.+ INVALID/')
+        ->not->toContain('Bratislva');
 });
