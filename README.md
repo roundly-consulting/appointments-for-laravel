@@ -94,7 +94,7 @@ return [
 |---|---|---|---|
 | `model` | `class-string` | `RoundlyConsulting\Appointments\Models\Appointment` | The Eloquent model used for appointments. Point it at your own subclass to customise behaviour. |
 | `participant` | `class-string` | `RoundlyConsulting\Appointments\Models\Participant` | The Eloquent model used for appointment participants. |
-| `key_type` | `string` | `bigint` (`APPOINTMENTS_KEY_TYPE`) | Key type of the polymorphic `participant_id` column the participants migration creates: `bigint`, `uuid` or `ulid`. Match the primary keys of the models that take part (they must share one type); set it before running the migrations. Any other value falls back to `bigint`. |
+| `key_type` | `string` | `bigint` (`APPOINTMENTS_KEY_TYPE`) | Key type of the polymorphic `participant_id` column the participants migration creates: `bigint`, `uuid` or `ulid`. Match the primary keys of the models that take part (they must share one type); set it before running the migrations. Any other value throws `InvalidConfigurationException`. |
 | `table_names.appointments` | `string` | `appointments` | Table the migrations create and the `Appointment` model reads and writes. Set it before running the migrations. |
 | `table_names.participants` | `string` | `appointment_participants` | Table the migrations create and the `Participant` model reads and writes. Set it before running the migrations. |
 | `timezone` | `?string` | `null` | The zone stored on a new appointment when none is given, and the zone a wall-clock string without an offset is read in. `null` uses `config('app.timezone')`. Each appointment keeps the zone it was booked in, so changing this later does not re-time existing appointments. |
@@ -104,6 +104,10 @@ return [
 | `reviews.verified_attendance_resolver` | `class-string` | `DatabaseVerifiedAttendanceResolver` | Resolver that decides whether a review is verified (default: author is a participant of a Completed appointment). |
 | `reviews.require_verified_attendance` | `bool` | `false` | When `true`, `review()` throws for an unverified author instead of storing an unverified review. |
 | `approvals.enforce_transitions` | `bool` | `false` | When `true`, the approval status-sync listener respects the appointment transition matrix (a mapped-but-illegal move is skipped). |
+
+The `bool` keys also take env-style strings: `true`/`1`/`on`/`yes` and `false`/`0`/`off`/`no`.
+Anything else — a typo such as `'disabled'` — throws `InvalidConfigurationException` instead of
+quietly reading as on or off.
 
 The effective configuration is summarised in Laravel's `about` command:
 
