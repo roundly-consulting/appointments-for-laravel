@@ -8,7 +8,7 @@ use Closure;
 use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Appointments\Commands\ExpireAppointmentApprovalsCommand;
 use RoundlyConsulting\Appointments\Listeners\SyncAppointmentStatusFromApproval;
-use RoundlyConsulting\Appointments\Reviews\NullVerifiedAttendanceResolver;
+use RoundlyConsulting\Appointments\Reviews\DatabaseVerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\AppointmentModel;
 use RoundlyConsulting\Appointments\Support\AppointmentsConfig;
@@ -57,10 +57,12 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(AppointmentManager::class);
 
+        // Not set binds the shipped resolver, the one the config file names; the null
+        // resolver never verifies, so a host has to choose it by name.
         $this->bindFromConfig(
             VerifiedAttendanceResolver::class,
             'appointments.reviews.verified_attendance_resolver',
-            NullVerifiedAttendanceResolver::class,
+            DatabaseVerifiedAttendanceResolver::class,
         );
     }
 
@@ -76,16 +78,16 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * The attendance resolver `bindFromConfig()` resolves: the null resolver when not set
-     * (absent, null or blank), otherwise a VerifiedAttendanceResolver class — anything else
-     * throws, as the binding does.
+     * The attendance resolver `bindFromConfig()` resolves: the shipped database resolver when
+     * not set (absent, null or blank), otherwise a VerifiedAttendanceResolver class — anything
+     * else throws, as the binding does.
      *
      * @return class-string<VerifiedAttendanceResolver>
      */
     private static function resolverClass(): string
     {
         if (AppointmentsConfig::isUnset('appointments.reviews.verified_attendance_resolver')) {
-            return NullVerifiedAttendanceResolver::class;
+            return DatabaseVerifiedAttendanceResolver::class;
         }
 
         $resolver = config('appointments.reviews.verified_attendance_resolver');

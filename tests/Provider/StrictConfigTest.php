@@ -11,6 +11,7 @@ use RoundlyConsulting\Appointments\Enums\Frequency;
 use RoundlyConsulting\Appointments\Facades\Appointments;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Reviews\DatabaseVerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Reviews\NullVerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\RecurrenceExpander;
@@ -185,14 +186,44 @@ it('uses the app timezone when none is set (strict config)', function (?string $
     expect(Appointments::schedule('Consultation')->startingAt('2026-07-01 09:00')->create()->timezone)->toBe('America/New_York');
 })->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
 
-it('binds the null attendance resolver when none is set (strict config)', function (?string $unset): void {
-    config()->set('appointments.reviews.verified_attendance_resolver', $unset);
+it('binds the shipped database attendance resolver when none is set (strict config)', function (array $reviews): void {
+    // Not set — left out, null or a host's blank `KEY=` — is the shipped resolver, never the
+    // null one that silently stops verifying every review.
+    config()->set('appointments.reviews', $reviews);
 
     Artisan::call('about', ['--only' => 'appointments']);
 
-    expect(app(VerifiedAttendanceResolver::class))->toBeInstanceOf(NullVerifiedAttendanceResolver::class)
-        ->and(Artisan::output())->toMatch('/Attendance resolver \.+ NullVerifiedAttendanceResolver/');
-})->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
+    expect(app(VerifiedAttendanceResolver::class))->toBeInstanceOf(DatabaseVerifiedAttendanceResolver::class)
+        ->and(Artisan::output())->toMatch('/Attendance resolver \.+ DatabaseVerifiedAttendanceResolver/');
+})->with([
+    'absent' => [['require_verified_attendance' => false]],
+    'null' => [['verified_attendance_resolver' => null]],
+    'blank' => [['verified_attendance_resolver' => '']],
+    'whitespace' => [['verified_attendance_resolver' => ' ']],
+]);
+
+it('binds the attendance resolver a host names explicitly (strict config)', function (string $resolver): void {
+    config()->set('appointments.reviews.verified_attendance_resolver', $resolver);
+
+    Artisan::call('about', ['--only' => 'appointments']);
+
+    expect(app(VerifiedAttendanceResolver::class))->toBeInstanceOf($resolver)
+        ->and(Artisan::output())->toMatch('/Attendance resolver \.+ '.class_basename($resolver).'/');
+})->with([
+    'null resolver, opted into' => NullVerifiedAttendanceResolver::class,
+    'database resolver' => DatabaseVerifiedAttendanceResolver::class,
+]);
+
+it('refuses an attendance resolver that is not one (strict config)', function (mixed $resolver): void {
+    config()->set('appointments.reviews.verified_attendance_resolver', $resolver);
+
+    expect(fn () => app(VerifiedAttendanceResolver::class))
+        ->toThrow(InvalidConfigurationException::class, 'appointments.reviews.verified_attendance_resolver');
+})->with([
+    'missing class' => 'App\\Missing',
+    'wrong class' => Appointment::class,
+    'array' => [[NullVerifiedAttendanceResolver::class]],
+]);
 
 it('keeps the about section rendering on a malformed host config (strict config)', function (): void {
     config()->set('appointments.default_duration_minutes', 'an hour');
