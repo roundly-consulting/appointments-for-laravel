@@ -10,10 +10,9 @@ use RoundlyConsulting\PackageToolkit\Support\ModelResolver;
 /**
  * Resolves the Eloquent model backing appointments from `appointments.model`.
  *
- * The toolkit's ModelResolver validates that the configured value is a real
- * Eloquent model; anything that is not an Appointment (so it cannot answer the
- * package's scopes, status transitions or participant relation) falls back to
- * the packaged model.
+ * Absent config resolves the packaged model; anything else must be that model or a subclass of
+ * it, or the toolkit's ModelResolver throws InvalidConfigurationException naming the key — a
+ * foreign class is never silently replaced.
  */
 final class AppointmentModel
 {
@@ -22,8 +21,6 @@ final class AppointmentModel
      */
     public static function class(): string
     {
-        $model = ModelResolver::for('appointments.model', Appointment::class);
-
-        return is_a($model, Appointment::class, true) ? $model : Appointment::class;
+        return ModelResolver::for('appointments.model', Appointment::class);
     }
 }

@@ -14,6 +14,7 @@ use RoundlyConsulting\Appointments\Support\ParticipantModel;
 use RoundlyConsulting\Appointments\Tests\Models\CustomAppointment;
 use RoundlyConsulting\Appointments\Tests\Models\CustomParticipant;
 use RoundlyConsulting\Appointments\Tests\Models\User;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 
 it('resolves the packaged models by default', function (): void {
     expect(AppointmentModel::class())->toBe(Appointment::class)
@@ -28,12 +29,19 @@ it('resolves host models configured on the package', function (): void {
         ->and(ParticipantModel::class())->toBe(CustomParticipant::class);
 });
 
-it('falls back to the packaged models when the configured class is not one', function (): void {
+it('refuses a foreign model instead of falling back to the packaged one', function (): void {
+    // The toolkit refuses any class that is not the packaged model or a subclass of it.
     config()->set('appointments.model', User::class);
     config()->set('appointments.participant', User::class);
 
-    expect(AppointmentModel::class())->toBe(Appointment::class)
-        ->and(ParticipantModel::class())->toBe(Participant::class);
+    expect(fn (): string => AppointmentModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [appointments.model] must be a class-string of ['.Appointment::class.'], ['.User::class.'] given.',
+    );
+    expect(fn (): string => ParticipantModel::class())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [appointments.participant] must be a class-string of ['.Participant::class.'], ['.User::class.'] given.',
+    );
 });
 
 it('creates appointments and participants through the configured host models', function (): void {
