@@ -119,7 +119,9 @@ return [
     |
     | Post-appointment reviews are provided by reviews-for-laravel. The resolver
     | decides whether a review is "verified" — by default an author is verified
-    | only when they are a participant of a Completed appointment. Set
+    | only when they are a participant of a Completed appointment. Left out,
+    | null or blank, the resolver is still DatabaseVerifiedAttendanceResolver;
+    | to never verify, name NullVerifiedAttendanceResolver explicitly. Set
     | "require_verified_attendance" to reject reviews from unverified authors
     | outright instead of merely marking them unverified.
     |

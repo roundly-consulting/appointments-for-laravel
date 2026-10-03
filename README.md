@@ -101,7 +101,7 @@ return [
 | `default_duration_minutes` | `int` | `60` | Duration applied when none is supplied, used to derive `ends_at` from `starts_at`. 1–525600. |
 | `prevent_conflicts` | `bool` | `false` | When `true`, creating, rescheduling or adding a participant throws on an overlapping booking for a participant. Can also be enabled per call. |
 | `recurrence.max_occurrences` | `int` | `365` | Hard cap on the number of occurrences a recurring series may expand to, 1–100000. |
-| `reviews.verified_attendance_resolver` | `class-string` | `DatabaseVerifiedAttendanceResolver` | Resolver that decides whether a review is verified (default: author is a participant of a Completed appointment). Not set (`null` or blank) binds `NullVerifiedAttendanceResolver`, which never verifies. |
+| `reviews.verified_attendance_resolver` | `class-string` | `DatabaseVerifiedAttendanceResolver` | Resolver that decides whether a review is verified (default: author is a participant of a Completed appointment). Not set (left out, `null` or blank) still binds `DatabaseVerifiedAttendanceResolver`. To never verify, name `NullVerifiedAttendanceResolver::class` explicitly. |
 | `reviews.require_verified_attendance` | `bool` | `false` | When `true`, `review()` throws for an unverified author instead of storing an unverified review. |
 | `approvals.enforce_transitions` | `bool` | `false` | When `true`, the approval status-sync listener respects the appointment transition matrix (a mapped-but-illegal move is skipped). |
 
@@ -553,7 +553,9 @@ appointments whose requests resolve move to `cancelled`. Schedule it, e.g.
 
 Appointments are reviewable. A review by a participant of a Completed appointment is stamped
 verified; anyone else stays unverified (or is rejected when
-`reviews.require_verified_attendance` is on). Aggregates count approved reviews only.
+`reviews.require_verified_attendance` is on). Aggregates count approved reviews only. To turn
+verification off, set `reviews.verified_attendance_resolver` to
+`NullVerifiedAttendanceResolver::class` — leaving it out or blank keeps the verifying default.
 
 ```php
 $review = $appointment->review($attendee)->rating(5)->content('Great')->create();
