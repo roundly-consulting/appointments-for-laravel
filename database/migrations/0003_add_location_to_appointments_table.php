@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use RoundlyConsulting\PackageToolkit\Support\Config;
+use RoundlyConsulting\Appointments\Support\AppointmentsConfig;
 
 return new class extends Migration
 {
@@ -22,7 +22,7 @@ return new class extends Migration
 
     private function appointmentsTable(): string
     {
-        // Absent means the packaged name; anything present must be a non-empty string.
-        return config('appointments.table_names.appointments') === null ? 'appointments' : Config::requireString('appointments.table_names.appointments');
+        // Not set (absent, null or blank) means the packaged name; anything else must be a string.
+        return AppointmentsConfig::appointmentsTable();
     }
 };

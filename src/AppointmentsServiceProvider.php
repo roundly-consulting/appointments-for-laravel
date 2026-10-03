@@ -76,18 +76,19 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * The attendance resolver `bindFromConfig()` resolves: the null resolver when unset,
-     * otherwise a VerifiedAttendanceResolver class — anything else throws, as the binding does.
+     * The attendance resolver `bindFromConfig()` resolves: the null resolver when not set
+     * (absent, null or blank), otherwise a VerifiedAttendanceResolver class — anything else
+     * throws, as the binding does.
      *
      * @return class-string<VerifiedAttendanceResolver>
      */
     private static function resolverClass(): string
     {
-        $resolver = config('appointments.reviews.verified_attendance_resolver');
-
-        if ($resolver === null) {
+        if (AppointmentsConfig::isUnset('appointments.reviews.verified_attendance_resolver')) {
             return NullVerifiedAttendanceResolver::class;
         }
+
+        $resolver = config('appointments.reviews.verified_attendance_resolver');
 
         if (! is_string($resolver) || ! class_exists($resolver) || ! is_a($resolver, VerifiedAttendanceResolver::class, true)) {
             throw InvalidConfigurationException::notAnImplementation('appointments.reviews.verified_attendance_resolver', VerifiedAttendanceResolver::class, $resolver);

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\Appointments\AppointmentsServiceProvider;
 use RoundlyConsulting\Appointments\DataTransferObjects\RecurrenceData;
 use RoundlyConsulting\Appointments\Enums\Frequency;
 use RoundlyConsulting\Appointments\Facades\Appointments;
 use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Appointments\Models\Participant;
+use RoundlyConsulting\Appointments\Reviews\NullVerifiedAttendanceResolver;
+use RoundlyConsulting\Appointments\Reviews\VerifiedAttendanceResolver;
 use RoundlyConsulting\Appointments\Support\RecurrenceExpander;
 use RoundlyConsulting\Appointments\Tests\Models\User;
 use RoundlyConsulting\Approvals\Facades\Approvals;
@@ -103,18 +106,19 @@ it('refuses a junk or non-positive default duration (strict config)', function (
         ->toThrow(InvalidConfigurationException::class, 'appointments.default_duration_minutes')
         ->and(fn () => (new Appointment)->durationInMinutes())
         ->toThrow(InvalidConfigurationException::class, 'appointments.default_duration_minutes');
-})->with(['word' => 'an hour', 'decimal' => '7.5', 'blank' => '', 'zero' => 0, 'negative' => '-15']);
+})->with(['word' => 'an hour', 'decimal' => '7.5', 'zero' => 0, 'negative' => '-15']);
 
-it('reads a canonical default duration string and an absent one as 60 (strict config)', function (): void {
+it('reads a canonical default duration string and an unset one as 60 (strict config)', function (?string $unset): void {
     config()->set('appointments.default_duration_minutes', '45');
     $set = Appointments::schedule('Short')->startingAt('2026-07-01 09:00')->create();
 
-    config()->set('appointments.default_duration_minutes', null);
+    config()->set('appointments.default_duration_minutes', $unset);
     $absent = Appointments::schedule('Default')->startingAt('2026-07-01 09:00')->create();
 
     expect($set->duration_minutes)->toBe(45)
-        ->and($absent->duration_minutes)->toBe(60);
-});
+        ->and($absent->duration_minutes)->toBe(60)
+        ->and((new Appointment)->durationInMinutes())->toBe(60);
+})->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
 
 it('refuses a junk or non-positive occurrence cap (strict config)', function (mixed $max): void {
     config()->set('appointments.recurrence.max_occurrences', $max);
@@ -123,24 +127,24 @@ it('refuses a junk or non-positive occurrence cap (strict config)', function (mi
         ->toThrow(InvalidConfigurationException::class, 'appointments.recurrence.max_occurrences');
 })->with(['word' => 'unlimited', 'zero' => 0, 'over the ceiling' => 100_001]);
 
-it('caps at 365 occurrences when no cap is configured (strict config)', function (): void {
-    config()->set('appointments.recurrence.max_occurrences', null);
+it('caps at 365 occurrences when no cap is set (strict config)', function (?string $unset): void {
+    config()->set('appointments.recurrence.max_occurrences', $unset);
 
     expect(app(RecurrenceExpander::class)->expand(CarbonImmutable::parse('2026-07-06 09:00'), new RecurrenceData(Frequency::Daily, count: 400)))
         ->toHaveCount(365);
-});
+})->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
 
-it('refuses a blank or non-string table name (strict config)', function (string $key, Closure $table, mixed $value): void {
+it('refuses a non-string table name (strict config)', function (string $key, Closure $table, mixed $value): void {
     config()->set($key, $value);
 
     expect($table)->toThrow(InvalidConfigurationException::class, $key);
 })->with([
     'appointments' => ['appointments.table_names.appointments', fn () => (new Appointment)->getTable()],
     'participants' => ['appointments.table_names.participants', fn () => (new Participant)->getTable()],
-])->with(['blank' => '', 'array' => [['appointments']], 'integer' => 1]);
+])->with(['array' => [['appointments']], 'integer' => 1]);
 
-it('refuses to migrate onto a blank table name (strict config)', function (): void {
-    config()->set('appointments.table_names.participants', ' ');
+it('refuses to migrate onto a non-string table name (strict config)', function (): void {
+    config()->set('appointments.table_names.participants', ['appointment_participants']);
 
     expect(function (): void {
         $migration = require __DIR__.'/../../database/migrations/0002_create_appointment_participants_table.php';
@@ -148,13 +152,24 @@ it('refuses to migrate onto a blank table name (strict config)', function (): vo
     })->toThrow(InvalidConfigurationException::class, 'appointments.table_names.participants');
 });
 
-it('uses the packaged table names when none are configured (strict config)', function (): void {
-    config()->set('appointments.table_names.appointments', null);
-    config()->set('appointments.table_names.participants', null);
+it('migrates onto the packaged table name when none is set (strict config)', function (?string $unset): void {
+    config()->set('appointments.table_names.participants', $unset);
+
+    Schema::dropIfExists('appointment_participants');
+
+    $migration = require __DIR__.'/../../database/migrations/0002_create_appointment_participants_table.php';
+    $migration->up();
+
+    expect(Schema::hasTable('appointment_participants'))->toBeTrue();
+})->with(['absent' => null, 'blank' => '', 'whitespace' => '  ']);
+
+it('uses the packaged table names when none are set (strict config)', function (?string $unset): void {
+    config()->set('appointments.table_names.appointments', $unset);
+    config()->set('appointments.table_names.participants', $unset);
 
     expect((new Appointment)->getTable())->toBe('appointments')
         ->and((new Participant)->getTable())->toBe('appointment_participants');
-});
+})->with(['absent' => null, 'blank' => '', 'whitespace' => '  ']);
 
 it('refuses a timezone that is not a timezone (strict config)', function (mixed $timezone): void {
     config()->set('appointments.timezone', $timezone);
@@ -163,10 +178,26 @@ it('refuses a timezone that is not a timezone (strict config)', function (mixed 
         ->toThrow(InvalidConfigurationException::class, 'appointments.timezone');
 })->with(['typo' => 'Europe/Bratislva', 'array' => [['UTC']], 'integer' => 2]);
 
+it('uses the app timezone when none is set (strict config)', function (?string $unset): void {
+    config()->set('app.timezone', 'America/New_York');
+    config()->set('appointments.timezone', $unset);
+
+    expect(Appointments::schedule('Consultation')->startingAt('2026-07-01 09:00')->create()->timezone)->toBe('America/New_York');
+})->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
+
+it('binds the null attendance resolver when none is set (strict config)', function (?string $unset): void {
+    config()->set('appointments.reviews.verified_attendance_resolver', $unset);
+
+    Artisan::call('about', ['--only' => 'appointments']);
+
+    expect(app(VerifiedAttendanceResolver::class))->toBeInstanceOf(NullVerifiedAttendanceResolver::class)
+        ->and(Artisan::output())->toMatch('/Attendance resolver \.+ NullVerifiedAttendanceResolver/');
+})->with(['absent' => null, 'blank' => '', 'whitespace' => ' ']);
+
 it('keeps the about section rendering on a malformed host config (strict config)', function (): void {
     config()->set('appointments.default_duration_minutes', 'an hour');
     config()->set('appointments.recurrence.max_occurrences', 'unlimited');
-    config()->set('appointments.table_names.appointments', '');
+    config()->set('appointments.table_names.appointments', ['appointments']);
     config()->set('appointments.timezone', 'Europe/Bratislva');
     config()->set('appointments.reviews.verified_attendance_resolver', 'App\\Missing');
 

@@ -12,8 +12,9 @@ use Throwable;
 /**
  * The strict readers behind every appointments setting that is not a switch or a model.
  *
- * An absent (null) key means the documented default. A present value of the wrong shape
- * throws InvalidConfigurationException naming the key: a typo never falls back silently.
+ * A key that is not set (absent, null or blank: `''` or whitespace, a host's `KEY=`) means
+ * the documented default. A present value of the wrong shape throws
+ * InvalidConfigurationException naming the key: a typo never falls back silently.
  * Before, `(int)` turned a default duration of `'an hour'` into 0, the recurrence cap reached
  * `min()` unvalidated, a blank table name reached SQL, and a non-string timezone quietly
  * became the app's.
@@ -34,21 +35,21 @@ final class AppointmentsConfig
 
     public static function appointmentsTable(): string
     {
-        return config('appointments.table_names.appointments') === null
+        return self::isUnset('appointments.table_names.appointments')
             ? 'appointments'
             : Config::requireString('appointments.table_names.appointments');
     }
 
     public static function participantsTable(): string
     {
-        return config('appointments.table_names.participants') === null
+        return self::isUnset('appointments.table_names.participants')
             ? 'appointment_participants'
             : Config::requireString('appointments.table_names.participants');
     }
 
     /**
      * Minutes an appointment lasts when it names neither an end nor a duration: 1 to a year,
-     * 60 when absent.
+     * 60 when not set.
      */
     public static function defaultDurationMinutes(): int
     {
@@ -56,7 +57,7 @@ final class AppointmentsConfig
     }
 
     /**
-     * The most occurrences one recurrence expands to: 1–100000, 365 when absent.
+     * The most occurrences one recurrence expands to: 1–100000, 365 when not set.
      */
     public static function maxOccurrences(): int
     {
@@ -64,16 +65,16 @@ final class AppointmentsConfig
     }
 
     /**
-     * The configured default timezone, or null when none is set (absent or an empty value),
+     * The configured default timezone, or null when none is set (absent, null or blank),
      * in which case the app's applies. Anything else must be a timezone PHP knows.
      */
     public static function timezone(): ?string
     {
-        $timezone = config('appointments.timezone');
-
-        if ($timezone === null || (is_string($timezone) && trim($timezone) === '')) {
+        if (self::isUnset('appointments.timezone')) {
             return null;
         }
+
+        $timezone = config('appointments.timezone');
 
         if (is_string($timezone)) {
             try {
@@ -90,5 +91,16 @@ final class AppointmentsConfig
         };
 
         throw new InvalidConfigurationException("Configuration value [appointments.timezone] must be a timezone identifier such as Europe/Bratislava, [{$given}] given.");
+    }
+
+    /**
+     * Whether `$key` is not set: absent, null or blank (`''` or whitespace, a host's `KEY=`).
+     * Every reader here treats such a key exactly like an absent one.
+     */
+    public static function isUnset(string $key): bool
+    {
+        $value = config($key);
+
+        return $value === null || (is_string($value) && trim($value) === '');
     }
 }
