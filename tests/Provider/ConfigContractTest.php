@@ -20,24 +20,6 @@ declare(strict_types=1);
  */
 it('ships exactly the config keys it reads', function (): void {
     expect(__DIR__.'/../../config/appointments.php')->toSatisfyConfigContract(__DIR__.'/../../src', [
-        // The two model keys are read through the toolkit's `ModelResolver::for('appointments.…')`
-        // seam rather than a `config()` call. They are real reads — they drive the whole
-        // swap — but they are not `config(` tokens, so a prefix is what makes them visible to
-        // the scraper.
-        //
-        // The keys are named exactly rather than using a blanket `'appointments.'`, which
-        // would count ANY string literal under the prefix as a read wherever it appeared —
-        // including translation keys and table names that are not config keys at all (the
-        // trap alerts hit with its `alerts.health` route-name default).
-        'extraReadPrefixes' => [
-            'appointments.model',
-            'appointments.participant',
-            // Read through `KeyType::fromConfig('appointments.key_type')` in the
-            // participants migration, not a `config(` token, so the scraper needs
-            // it named here. It decides the shipped morph column types.
-            'appointments.key_type',
-        ],
-
         // Deliberately NO `excludeFromReverse` for the provider. The testing README's own
         // example excludes the service provider on the grounds that "a render is not a
         // read" — but this provider's `contributesToAbout()` closure reads a dozen
