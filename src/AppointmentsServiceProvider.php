@@ -15,6 +15,7 @@ use RoundlyConsulting\Approvals\Events\ApprovalRequestResolved;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 final class AppointmentsServiceProvider extends PackageServiceProvider
 {
@@ -114,6 +115,6 @@ final class AppointmentsServiceProvider extends PackageServiceProvider
 
     private static function switch(string $key, bool $default): string
     {
-        return (bool) config($key, $default) ? 'ON' : 'OFF';
+        return Config::boolean($key, $default) ? 'ON' : 'OFF';
     }
 }

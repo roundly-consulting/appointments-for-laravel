@@ -30,6 +30,7 @@ use RoundlyConsulting\Contacts\Concerns\HasContacts;
 use RoundlyConsulting\Geolocation\Casts\CoordinatesCast;
 use RoundlyConsulting\Geolocation\Concerns\HasLocation;
 use RoundlyConsulting\Geolocation\DataTransferObjects\Coordinates;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 use RoundlyConsulting\Reviews\Concerns\HasReviews;
 use RoundlyConsulting\Reviews\Support\PendingReview;
 
@@ -229,7 +230,7 @@ class Appointment extends Model
     {
         $verified = app(VerifiedAttendanceResolver::class)->verified($author, $this);
 
-        if (! $verified && (bool) config('appointments.reviews.require_verified_attendance', false)) {
+        if (! $verified && Config::boolean('appointments.reviews.require_verified_attendance')) {
             throw CannotReviewAppointmentException::unverifiedAttendance($this);
         }
 

@@ -11,6 +11,7 @@ use RoundlyConsulting\Appointments\Models\Appointment;
 use RoundlyConsulting\Approvals\Enums\ApprovalStatus;
 use RoundlyConsulting\Approvals\Events\ApprovalRequestResolved;
 use RoundlyConsulting\Approvals\Models\ApprovalRequest;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * Mirrors an appointment's approval-request resolution onto its own Status, so an
@@ -93,6 +94,6 @@ final class SyncAppointmentStatusFromApproval
 
     private function enforcing(): bool
     {
-        return (bool) config('appointments.approvals.enforce_transitions', false);
+        return Config::boolean('appointments.approvals.enforce_transitions');
     }
 }

@@ -36,7 +36,8 @@ return [
     | The key type used for the polymorphic participant column. Use "uuid" or
     | "ulid" when the models that column points at use UUID/ULID primary keys,
     | otherwise leave it as "bigint". Your morph targets must share one key type;
-    | set this to match. Any unrecognized value falls back to "bigint".
+    | set this to match. Any other value throws an InvalidConfigurationException
+    | when the migrations run.
     |
     | Supported: "bigint", "uuid", "ulid"
     |
