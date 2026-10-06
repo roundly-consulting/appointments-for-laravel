@@ -6,10 +6,16 @@ All notable changes to `appointments-for-laravel` are documented in this file. T
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-06
+
 ### Changed
 
 - Requires `roundly-consulting/geolocation-for-laravel` `^2.0`. If your app uses geolocation's
   Google distances, enable the Routes API on the key in `GOOGLE_MAPS_API_KEY`.
+- Documentation: the README hero image loads from an absolute URL, so it renders on Packagist and
+  other sites.
+- Maintenance: `composer.json` `homepage` and `support.docs` point at the package documentation
+  site.
 
 ## 1.0.0 - 2026-10-03
 
