@@ -24,7 +24,7 @@
         "roundly-consulting/approvals-for-laravel": "^1.0",
         "roundly-consulting/contacts-for-laravel": "^1.0",
         "roundly-consulting/enums-for-laravel": "^1.0",
-        "roundly-consulting/geolocation-for-laravel": "^1.0",
+        "roundly-consulting/geolocation-for-laravel": "^2.0",
         "roundly-consulting/package-toolkit-for-laravel": "^1.0",
         "roundly-consulting/reviews-for-laravel": "^1.0"
     },

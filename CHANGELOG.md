@@ -6,6 +6,11 @@ All notable changes to `appointments-for-laravel` are documented in this file. T
 
 ## Unreleased
 
+### Changed
+
+- Requires `roundly-consulting/geolocation-for-laravel` `^2.0`. If your app uses geolocation's
+  Google distances, enable the Routes API on the key in `GOOGLE_MAPS_API_KEY`.
+
 ## 1.0.0 - 2026-10-03
 
 Initial public release.
