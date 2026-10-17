@@ -6,6 +6,8 @@ All notable changes to `appointments-for-laravel` are documented in this file. T
 
 ## Unreleased
 
+## 1.1.2 - 2026-10-17
+
 ### Fixed
 
 - Factories build the configured model when a host swaps it.
