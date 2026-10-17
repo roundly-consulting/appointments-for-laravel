@@ -84,6 +84,13 @@ ArchPresets::modelsResolveThroughSeam(__DIR__.'/../src', 'Support', [
 ]);
 
 /**
+ * The factory half of the seam: AppointmentFactory returns the AppointmentModel seam from
+ * `modelName()`, so a host that swapped `appointments.model` gets its own rows (and events)
+ * out of `Appointment::factory()` instead of the packaged class.
+ */
+ArchPresets::factoriesResolveThroughSeam(__DIR__.'/../database/factories', __DIR__.'/../src', 'Support');
+
+/**
  * The Dependency Policy as a test. No `alsoAllow`: appointments' `require` ships only
  * php/illuminate/roundly, and the workflow installs test tooling with `--dev`. If it goes red
  * the graph is wrong — never widen the allow-list to quiet it.
